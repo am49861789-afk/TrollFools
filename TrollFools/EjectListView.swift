@@ -19,122 +19,157 @@ struct EjectListView: View {
     @State var isDisablingAll = false
     @State var isDeletingAll = false
     @State var isExportingAll = false
-    @State var isErrorOccurred = false
+    @State var isReplaceImporterPresented = false
+    @State var isErrorOccurred: Bool = false
+    @State private var isReplacing: Bool = false
     @State var lastError: Error?
-
     @State var isWarningPresented = false
+    @Environment(\.colorScheme) var colorScheme
 
     @StateObject var viewControllerHost = ViewControllerHost()
 
     @AppStorage var useWeakReference: Bool
     @AppStorage var preferMainExecutable: Bool
     @AppStorage var injectStrategy: InjectorV3.Strategy
-
-    var shouldShowActions: Bool {
-        !ejectList.filter.isSearching && !ejectList.filteredPlugIns.isEmpty
-    }
-
-    var shouldDisableActions: Bool {
-        isEnablingAll || isDisablingAll || isDeletingAll
-    }
+    @StateObject private var renameManager: RenameManager
 
     init(_ app: App) {
         _ejectList = StateObject(wrappedValue: EjectListModel(app))
         _useWeakReference = AppStorage(wrappedValue: true, "UseWeakReference-\(app.bid)")
         _preferMainExecutable = AppStorage(wrappedValue: false, "PreferMainExecutable-\(app.bid)")
         _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)")
+        _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
+    }
+    
+    @ViewBuilder
+    private var loadingView: some View {
+        ZStack {
+            Color.primary.opacity(0.2)
+                .ignoresSafeArea()
+
+            if #available(iOS 15.0, *) {
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+
+                    Text(NSLocalizedString("Replacing...", comment: ""))
+                        .font(.headline)
+                }
+                .padding(25)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
+                .shadow(radius: 10)
+            } else {
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+
+                    Text(NSLocalizedString("Replacing...", comment: ""))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .padding(25)
+                .background(Color.black.opacity(0.75))
+                .cornerRadius(15)
+                .shadow(radius: 10)
+            }
+        }
+        .transition(.opacity)
     }
 
     var body: some View {
-        if #available(iOS 15, *) {
-            content
-                .alert(NSLocalizedString("Eject All", comment: ""), isPresented: $isWarningPresented) {
-                    Button(role: .destructive) {
-                        deleteAll(shouldDesist: true)
-                    } label: {
-                        Text(NSLocalizedString("Confirm", comment: ""))
+        ZStack {
+            if #available(iOS 15, *) {
+                content
+                    .alert(NSLocalizedString("Eject All", comment: ""), isPresented: $isWarningPresented) {
+                        Button(role: .destructive) {
+                            deleteAll(shouldDesist: true)
+                        } label: {
+                            Text(NSLocalizedString("Confirm", comment: ""))
+                        }
+                        Button(role: .cancel) {
+                            isWarningPresented = false
+                        } label: {
+                            Text(NSLocalizedString("Cancel", comment: ""))
+                        }
+                    } message: {
+                        Text(NSLocalizedString("Are you sure you want to eject all plug-ins? This action cannot be undone.", comment: ""))
                     }
-                    Button(role: .cancel) {
-                        isWarningPresented = false
-                    } label: {
-                        Text(NSLocalizedString("Cancel", comment: ""))
-                    }
-                } message: {
-                    Text(NSLocalizedString("Are you sure you want to eject all plug-ins? This action cannot be undone.", comment: ""))
-                }
-        } else {
-            content
+            } else {
+                content
+            }
+            
+            if isReplacing {
+                loadingView
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: isReplacing)
     }
 
     var content: some View {
-        refreshableListView
-            .toolbar { toolbarContent }
-            .animation(.easeOut, value: isExportingAll)
-            .quickLookPreview($quickLookExport)
-    }
-
-    @ViewBuilder
-    var refreshableListView: some View {
-        if #available(iOS 15, *) {
-            searchableListView
-                .refreshable {
-                    ejectList.reload()
-                }
-        } else {
-            searchableListView
-                .introspect(.list, on: .iOS(.v14)) { tableView in
-                    if tableView.refreshControl == nil {
-                        tableView.refreshControl = {
-                            let refreshControl = UIRefreshControl()
-                            refreshControl.addAction(UIAction { action in
-                                ejectList.reload()
-                                if let control = action.sender as? UIRefreshControl {
-                                    control.endRefreshing()
-                                }
-                            }, for: .valueChanged)
-                            return refreshControl
-                        }()
+        Group {
+            if #available(iOS 15, *) {
+                searchableListView
+                    .refreshable {
+                        ejectList.reload()
                     }
-                }
+            } else {
+                searchableListView
+                    .introspect(.list, on: .iOS(.v14)) { tableView in
+                        if tableView.refreshControl == nil {
+                            tableView.refreshControl = {
+                                let refreshControl = UIRefreshControl()
+                                refreshControl.addAction(UIAction { action in
+                                    ejectList.reload()
+                                    if let control = action.sender as? UIRefreshControl {
+                                        control.endRefreshing()
+                                    }
+                                }, for: .valueChanged)
+                                return refreshControl
+                            }()
+                        }
+                    }
+            }
         }
     }
 
-    @ViewBuilder
+
     var searchableListView: some View {
-        if #available(iOS 15, *) {
-            ejectListView
-                .onViewWillAppear { viewController in
-                    viewControllerHost.viewController = viewController
-                }
-                .searchable(
-                    text: $ejectList.filter.searchKeyword,
-                    placement: .automatic,
-                    prompt: NSLocalizedString("Search…", comment: "")
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
-        } else {
-            // Fallback on earlier versions
-            ejectListView
-                .onReceive(searchViewModel.$searchKeyword) {
-                    ejectList.filter.searchKeyword = $0
-                }
-                .introspect(.viewController, on: .iOS(.v14)) { viewController in
-                    viewController.navigationItem.hidesSearchBarWhenScrolling = true
-                    viewControllerHost.viewController = viewController
-                    if searchViewModel.searchController == nil {
-                        viewController.navigationItem.searchController = {
-                            let searchController = UISearchController(searchResultsController: nil)
-                            searchController.searchResultsUpdater = searchViewModel
-                            searchController.obscuresBackgroundDuringPresentation = false
-                            searchController.hidesNavigationBarDuringPresentation = true
-                            searchController.searchBar.placeholder = NSLocalizedString("Search…", comment: "")
-                            return searchController
-                        }()
-                        searchViewModel.searchController = viewController.navigationItem.searchController
+        Group {
+            if #available(iOS 15, *) {
+                ejectListView
+                    .onViewWillAppear { viewController in
+                        viewControllerHost.viewController = viewController
                     }
-                }
+                    .searchable(
+                        text: $ejectList.filter.searchKeyword,
+                        placement: .automatic,
+                        prompt: NSLocalizedString("Search…", comment: "")
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+            } else {
+                // Fallback on earlier versions
+                ejectListView
+                    .onReceive(searchViewModel.$searchKeyword) {
+                        ejectList.filter.searchKeyword = $0
+                    }
+                    .introspect(.viewController, on: .iOS(.v14)) { viewController in
+                        viewControllerHost.viewController = viewController
+                        if searchViewModel.searchController == nil {
+                            viewController.navigationItem.hidesSearchBarWhenScrolling = true
+                            viewController.navigationItem.searchController = {
+                                let searchController = UISearchController(searchResultsController: nil)
+                                searchController.searchResultsUpdater = searchViewModel
+                                searchController.obscuresBackgroundDuringPresentation = false
+                                searchController.hidesNavigationBarDuringPresentation = true
+                                searchController.searchBar.placeholder = NSLocalizedString("Search…", comment: "")
+                                return searchController
+                            }()
+                            searchViewModel.searchController = viewController.navigationItem.searchController
+                        }
+                    }
+            }
         }
     }
 
@@ -153,31 +188,32 @@ struct EjectListView: View {
                 paddedHeaderFooterText(NSLocalizedString("After the app upgrade, any injected plugins will be disabled. You will need to manually re-enable them.", comment: ""))
             }
 
-            Section {
-                if shouldShowActions {
+            if !ejectList.filter.isSearching && !ejectList.filteredPlugIns.isEmpty {
+                Section {
                     enableAllButton
-                        .disabled(shouldDisableActions || !ejectList.isOkToEnableAll)
-                        .foregroundColor(shouldDisableActions ? .secondary : .accentColor)
+                        .disabled(isEnablingAll || !ejectList.isOkToEnableAll)
+                        .foregroundColor(isEnablingAll ? .secondary : .accentColor)
 
                     disableAllButton
-                        .disabled(shouldDisableActions || !ejectList.isOkToDisableAll)
-                        .foregroundColor(shouldDisableActions ? .secondary : .accentColor)
+                        .disabled(isDisablingAll || !ejectList.isOkToDisableAll)
+                        .foregroundColor(isDisablingAll ? .secondary : .accentColor)
                 }
-            }
 
-            Section {
-                if shouldShowActions {
+                Section {
                     deleteAllButton
-                        .disabled(shouldDisableActions)
-                        .foregroundColor(shouldDisableActions ? .secondary : Color(.systemRed))
-                }
-            } footer: {
-                if shouldShowActions && ejectList.app.isFromTroll {
-                    paddedHeaderFooterText(NSLocalizedString("Some plug-ins were not injected by TrollFools, please eject them with caution.", comment: ""))
+                        .disabled(isDeletingAll)
+                        .foregroundColor(isDeletingAll ? .secondary : Color(.systemRed))
+                } footer: {
+                    if ejectList.app.isFromTroll {
+                        paddedHeaderFooterText(NSLocalizedString("Some plug-ins were not injected by TrollFools, please eject them with caution.", comment: ""))
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .toolbar {
+            toolbarContent
+        }
         .navigationTitle(NSLocalizedString("Plug-Ins", comment: ""))
         .animation(.easeOut, value: combines(
             ejectList.filter,
@@ -187,15 +223,51 @@ struct EjectListView: View {
             isDisablingAll,
             isDeletingAll
         ))
-        .background(NavigationLink(isActive: $isErrorOccurred) {
-            FailureView(
-                title: NSLocalizedString("Error", comment: ""),
-                error: lastError
-            )
-        } label: { })
+        .background(Group {
+            NavigationLink(isActive: $isErrorOccurred) {
+                FailureView(
+                    title: NSLocalizedString("Error", comment: ""),
+                    error: lastError
+                )
+            } label: { }
+        })
         .onChange(of: ejectList.processingPlugIn) { plugIn in
             if let plugIn {
                 togglePlugIn(plugIn)
+            }
+        }
+        
+        .fileImporter(
+             isPresented: $isReplaceImporterPresented,
+             allowedContentTypes: [
+                 .init(filenameExtension: "dylib")!,
+                 .init(filenameExtension: "deb")!,
+                 .bundle,
+                 .framework,
+                 .package,
+                 .zip,
+             ],
+             allowsMultipleSelection: false
+         ) { result in
+             switch result {
+             case .success(let urls):
+                 if let url = urls.first {
+                     performReplace(with: url)
+                 }
+             case .failure(let error):
+                 self.lastError = error
+                 self.isErrorOccurred = true
+             }
+         }
+         .onChange(of: ejectList.plugInToReplace) { plugIn in
+             if plugIn != nil {
+                 isReplaceImporterPresented = true
+             }
+         }
+
+        .onChange(of: isReplaceImporterPresented) { isPresented in
+            if !isPresented {
+                ejectList.plugInToReplace = nil
             }
         }
     }
@@ -315,15 +387,18 @@ struct EjectListView: View {
         }
     }
 
-    @ViewBuilder
     private func deletablePlugInCell(_ plugin: InjectedPlugIn) -> some View {
-        if #available(iOS 16, *) {
-            PlugInCell(plugin, quickLookExport: $quickLookExport)
-                .environmentObject(ejectList)
-        } else {
-            PlugInCell(plugin, quickLookExport: $quickLookExport)
-                .environmentObject(ejectList)
-                .padding(.vertical, 4)
+        Group {
+            if #available(iOS 16, *) {
+                PlugInCell(plugin, quickLookExport: $quickLookExport)
+                    .environmentObject(ejectList)
+                    .environmentObject(renameManager)
+            } else {
+                PlugInCell(plugin, quickLookExport: $quickLookExport)
+                    .environmentObject(ejectList)
+                    .environmentObject(renameManager)
+                    .padding(.vertical, 4)
+            }
         }
     }
 
@@ -607,7 +682,7 @@ struct EjectListView: View {
 
         let zipURL = InjectorV3.temporaryRoot
             .appendingPathComponent(
-                "\(ejectList.app.name)_\(ejectList.app.bid)_\(UUID().uuidString.components(separatedBy: "-").last ?? "").zip")
+                "\(ejectList.app.name)_\(ejectList.app.id)_\(UUID().uuidString.components(separatedBy: "-").last ?? "").zip")
 
         try fileMgr.zipItem(at: exportURL, to: zipURL, shouldKeepParent: false)
 
@@ -616,6 +691,81 @@ struct EjectListView: View {
         }
     }
 
+    private func performReplace(with newURL: URL) {
+        guard let plugInToReplace = ejectList.plugInToReplace else { return }
+
+        let wasEnabled = plugInToReplace.isEnabled
+        var logFileURL: URL?
+        
+        self.isReplacing = true
+
+       // let view = viewControllerHost.viewController?.navigationController?.view
+        //view?.isUserInteractionEnabled = false
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer {
+                DispatchQueue.main.async {
+                    ejectList.plugInToReplace = nil
+                    ejectList.app.reload()
+                    ejectList.reload()
+                    //view?.isUserInteractionEnabled = true
+                    self.isReplacing = false
+                }
+            }
+
+            do {
+                let injector = try InjectorV3(ejectList.app.url)
+                logFileURL = injector.latestLogFileURL
+                if injector.appID.isEmpty { injector.appID = ejectList.app.bid }
+                if injector.teamID.isEmpty { injector.teamID = ejectList.app.teamID }
+
+                injector.useWeakReference = useWeakReference
+                injector.preferMainExecutable = preferMainExecutable
+                injector.injectStrategy = injectStrategy
+
+                if wasEnabled {
+                    
+                    try injector.eject([plugInToReplace.url], shouldDesist: true)
+                    DDLogInfo("Successfully ejected old enabled plugin: \(plugInToReplace.url.lastPathComponent)", ddlog: injector.logger)
+
+                    try injector.inject([newURL], shouldPersist: true)
+                    DDLogInfo("Successfully injected new plugin: \(newURL.lastPathComponent)", ddlog: injector.logger)
+                    
+                } else {
+                    
+                    let preparedAssetURLs = try injector.preprocessAssets([newURL])
+                    guard let newAssetURL = preparedAssetURLs.first else {
+                        throw InjectorV3.Error.generic(NSLocalizedString("No valid plug-ins found in the selected file.", comment: ""))
+                    }
+
+                    let oldPersistentURL = injector.persistentPlugInsDirectoryURL.appendingPathComponent(plugInToReplace.url.lastPathComponent)
+
+                    if FileManager.default.fileExists(atPath: oldPersistentURL.path) {
+                        try injector.cmdRemove(oldPersistentURL, recursively: injector.checkIsDirectory(oldPersistentURL))
+                        DDLogInfo("Removed old disabled plugin from persistent storage: \(oldPersistentURL.lastPathComponent)", ddlog: injector.logger)
+                    }
+
+                    let newPersistentURL = injector.persistentPlugInsDirectoryURL.appendingPathComponent(newAssetURL.lastPathComponent)
+                    try injector.cmdCopy(from: newAssetURL, to: newPersistentURL, overwrite: true)
+                    try injector.cmdChangeOwner(newPersistentURL, owner: 501, groupOwner: 501, recursively: injector.checkIsDirectory(newPersistentURL))
+                    DDLogInfo("Copied new plugin to persistent storage: \(newPersistentURL.lastPathComponent)", ddlog: injector.logger)
+                }
+
+            } catch {
+                DispatchQueue.main.async {
+                    DDLogError("\(error)", ddlog: InjectorV3.main.logger)
+                    var userInfo: [String: Any] = [NSLocalizedDescriptionKey: error.localizedDescription]
+                    if let logFileURL {
+                        userInfo[NSURLErrorKey] = logFileURL
+                    }
+                    let nsErr = NSError(domain: Constants.gErrorDomain, code: 0, userInfo: userInfo)
+                    lastError = nsErr
+                    isErrorOccurred = true
+                }
+            }
+        }
+    }
+    
     @ViewBuilder
     private func paddedHeaderFooterText(_ content: String) -> some View {
         if #available(iOS 15, *) {

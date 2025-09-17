@@ -11,18 +11,13 @@ struct OptionView: View {
     let app: App
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
-
     @State var isImporterPresented = false
     @State var isImporterSelected = false
-
     @State var isWarningPresented = false
     @State var temporaryResult: Result<[URL], any Error>?
-
     @State var isSettingsPresented = false
     @State var importerResult: Result<[URL], any Error>?
-
     @State var numberOfPlugIns: Int = 0
-
     @AppStorage("isWarningHidden")
     var isWarningHidden: Bool = false
 
@@ -58,12 +53,30 @@ struct OptionView: View {
                         Text(NSLocalizedString("Cancel", comment: ""))
                     }
                 } message: {
-                    if case let .success(urls) = $0 {
+                    if case .success(let urls) = $0 {
                         Text(Self.warningMessage(urls))
                     }
                 }
         } else {
             wrappedContent
+            .alert(isPresented: $isWarningPresented) {
+                guard case .success(let urls) = temporaryResult else {
+                    return Alert(title: Text("Error"))
+                }
+                
+                return Alert(
+                    title: Text(NSLocalizedString("Notice", comment: "")),
+                    message: Text(Self.warningMessage(urls)),
+                    primaryButton: .destructive(Text(NSLocalizedString("Continue and Don’t Show Again", comment: ""))) {
+                        importerResult = temporaryResult
+                        isImporterSelected = true
+                        isWarningHidden = true
+                    },
+                    secondaryButton: .cancel() {
+                        temporaryResult = nil
+                    }
+                )
+            }
         }
     }
 
@@ -114,10 +127,10 @@ struct OptionView: View {
             NavigationLink(isActive: $isImporterSelected) {
                 if let result = importerResult {
                     switch result {
-                    case let .success(urls):
+                    case .success(let urls):
                         InjectView(app, urlList: urls
                             .sorted(by: { $0.lastPathComponent < $1.lastPathComponent }))
-                    case let .failure(error):
+                    case .failure(let error):
                         FailureView(
                             title: NSLocalizedString("Error", comment: ""),
                             error: error
@@ -143,15 +156,14 @@ struct OptionView: View {
         ) {
             result in
             switch result {
-            case let .success(theSuccess):
-                if #available(iOS 15, *) {
-                    if !isWarningHidden && theSuccess.contains(where: { $0.pathExtension.lowercased() == "deb" }) {
-                        temporaryResult = result
-                        isWarningPresented = true
-                        return
-                    }
+            case .success(let theSuccess):
+                if !isWarningHidden && theSuccess.contains(where: { $0.pathExtension.lowercased() == "deb" }) {
+                    temporaryResult = result
+                    isWarningPresented = true
+                } else {
+                    importerResult = result
+                    isImporterSelected = true
                 }
-                fallthrough
             case .failure:
                 importerResult = result
                 isImporterSelected = true
@@ -187,7 +199,7 @@ struct OptionView: View {
         }
         return String(format: NSLocalizedString("You’ve selected at least one Debian Package “%@”. We’re here to remind you that it will not work as it was in a jailbroken environment. Please make sure you know what you’re doing.", comment: ""), firstDylibName)
     }
-
+    
     private func recalculatePlugInCount() {
         var urls = [URL]()
         urls += InjectorV3.main.injectedAssetURLsInBundle(app.url)

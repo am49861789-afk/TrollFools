@@ -43,8 +43,8 @@ final class AppListModel: ObservableObject {
         }
     }
 
-    static let isLegacyDevice: Bool = { UIScreen.main.fixedCoordinateSpace.bounds.height <= 736.0 }()
     static let hasTrollStore: Bool = { LSApplicationProxy(forIdentifier: "com.opa334.TrollStore") != nil }()
+    static let isLegacyDevice: Bool = { UIScreen.main.fixedCoordinateSpace.bounds.height <= 736.0 }()
     private var _allApplications: [App] = []
 
     let selectorURL: URL?
@@ -55,6 +55,7 @@ final class AppListModel: ObservableObject {
     @Published var activeScopeApps: OrderedDictionary<String, [App]> = [:]
 
     @Published var unsupportedCount: Int = 0
+    @Published var unsupportedApps: [App] = []
 
     lazy var isFilzaInstalled: Bool = {
         if let filzaURL {
@@ -63,7 +64,7 @@ final class AppListModel: ObservableObject {
             false
         }
     }()
-    private let filzaURL = URL(string: "filza://view")
+    private let filzaURL = URL(string: "filza://")
 
     @Published var isRebuildNeeded: Bool = false
 
@@ -106,9 +107,10 @@ final class AppListModel: ObservableObject {
     }
 
     func reload() {
-        let allApplications = Self.fetchApplications(&unsupportedCount)
-        allApplications.forEach { $0.appList = self }
-        _allApplications = allApplications
+        let (supportedApps, unsupportedApps) = Self.fetchApplications(&unsupportedCount)
+        supportedApps.forEach { $0.appList = self }
+        self.unsupportedApps = unsupportedApps
+        _allApplications = supportedApps
         performFilter()
     }
 
@@ -149,7 +151,7 @@ final class AppListModel: ObservableObject {
         "xyz.willy.Zebra",
     ]
 
-    private static func fetchApplications(_ unsupportedCount: inout Int) -> [App] {
+    private static func fetchApplications(_ unsupportedCount: inout Int) -> (supported: [App], unsupported: [App]) {
         let allApps: [App] = LSApplicationWorkspace.default()
             .allApplications()
             .compactMap { proxy in
@@ -196,29 +198,33 @@ final class AppListModel: ObservableObject {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         unsupportedCount = allApps.count - filteredApps.count
+        
+        let allAppsSet = Set(allApps)
+        let filteredAppsSet = Set(filteredApps)
+        let unsupportedAppsList = allAppsSet.subtracting(filteredAppsSet)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        return filteredApps
+        return (filteredApps, unsupportedAppsList)
     }
 }
 
 extension AppListModel {
     func openInFilza(_ url: URL) {
-        guard let filzaURL else {
+        let rawPath = url.path
+
+        guard let encodedPath = rawPath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            UIApplication.shared.open(url)
             return
         }
 
-        let fileURL: URL
-        if #available(iOS 16, *) {
-            fileURL = filzaURL.appending(path: url.path)
-        } else {
-            fileURL = URL(string: filzaURL.absoluteString + (url.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""))!
-        }
+        let finalURLString = "filza://view" + encodedPath
 
-        UIApplication.shared.open(fileURL)
+        guard let finalURL = URL(string: finalURLString) else { return }
+
+        UIApplication.shared.open(finalURL)
     }
 
     func rebuildIconCache() {
-        // Sadly, we can't call `trollstorehelper` directly because only TrollStore can launch it without error.
         DispatchQueue.global(qos: .userInitiated).async {
             LSApplicationWorkspace.default().openApplication(withBundleID: "com.opa334.TrollStore")
         }

@@ -33,6 +33,16 @@ extension InjectorV3 {
             let destURL = persistentPlugInsDirectoryURL.appendingPathComponent(filteredURL.lastPathComponent)
             try? cmdRemove(destURL, recursively: checkIsDirectory(destURL))
         }
+        
+        do {
+                let remainingItems = try FileManager.default.contentsOfDirectory(atPath: persistentPlugInsDirectoryURL.path)
+                if remainingItems.isEmpty {
+                    try? cmdRemove(persistentPlugInsDirectoryURL, recursively: false)
+                }
+            } catch {
+                try? cmdRemove(persistentPlugInsDirectoryURL, recursively: false)
+            
+       }
     }
 
     func persistedAssetURLs(bid: String) -> [URL] {
@@ -40,9 +50,9 @@ extension InjectorV3 {
         guard let contents = try? FileManager.default.contentsOfDirectory(atPath: base.path) else {
             return []
         }
-        return filteredURLs(contents
+        return contents
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            .map { base.appendingPathComponent($0) })
+            .map { base.appendingPathComponent($0) }
     }
 
     func hasPersistedAssets(bid: String) -> Bool {

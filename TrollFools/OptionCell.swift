@@ -24,7 +24,7 @@ struct OptionCell: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             ZStack {
                 Image(systemName: iconName)
                     .resizable()
