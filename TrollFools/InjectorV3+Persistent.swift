@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CocoaLumberjackSwift
 
 extension InjectorV3 {
     func persist(_ assetURLs: [URL]) throws {
@@ -30,28 +29,9 @@ extension InjectorV3 {
     }
 
     func desist(_ assetURLs: [URL]) {
-        do {
-            let directoryURL = persistentPlugInsDirectoryURL
-
-            guard FileManager.default.fileExists(atPath: directoryURL.path) else {
-                return
-            }
-
-            let allItems = try FileManager.default.contentsOfDirectory(
-                at: directoryURL,
-                includingPropertiesForKeys: nil,
-                options: []
-            )
-
-            for itemURL in allItems {
-                try cmdRemove(itemURL, recursively: true)
-            }
-
-            try cmdRemove(directoryURL, recursively: false)
-
-        } catch {
-            DDLogError("An error occurred during desist operation: \(error)", ddlog: logger)
-            try? cmdRemove(persistentPlugInsDirectoryURL, recursively: false)
+        for filteredURL in filteredURLs(assetURLs) {
+            let destURL = persistentPlugInsDirectoryURL.appendingPathComponent(filteredURL.lastPathComponent)
+            try? cmdRemove(destURL, recursively: checkIsDirectory(destURL))
         }
     }
 
