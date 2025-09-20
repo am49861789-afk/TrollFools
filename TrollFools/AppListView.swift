@@ -305,13 +305,13 @@ struct AppListView: View {
             else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
-            /*
+
             if #available(iOS 15, *) {
                 if shouldShowAdvertisement {
                     advertisementSection
                 }
             }
-             */
+
             appSections
         }
     }
