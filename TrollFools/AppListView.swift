@@ -28,19 +28,8 @@ struct AppListView: View {
     @State var latestVersionString: String?
     @State private var isUnsupportedSheetPresented = false
 
-    @AppStorage("isAdvertisementHiddenV2")
-    var isAdvertisementHidden: Bool = false
-
     @AppStorage("isWarningHidden")
     var isWarningHidden: Bool = false
-
-    var shouldShowAdvertisement: Bool {
-        !isAdvertisementHidden &&
-            !appList.filter.isSearching &&
-            !appList.filter.showPatchedOnly &&
-            !appList.isRebuildNeeded &&
-            !appList.isSelectorMode
-    }
 
     var appString: String {
         let appNameString = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "TrollFools"
@@ -120,9 +109,7 @@ struct AppListView: View {
                 }
             }
             .onAppear {
-                if Double.random(in: 0 ..< 1) < 0.1 {
-                    isAdvertisementHidden = false
-                }
+                
             }
                 /*
                 CheckUpdateManager.shared.checkUpdateIfNeeded { latestVersion, _ in
@@ -261,7 +248,6 @@ struct AppListView: View {
             appList.activeScope,
             appList.filter,
             appList.unsupportedCount,
-            shouldShowAdvertisement
         ))
         .listStyle(.insetGrouped)
         .navigationTitle(appList.isSelectorMode ?
@@ -304,13 +290,6 @@ struct AppListView: View {
             }
             else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
-            }
-
-            
-            if #available(iOS 15, *) {
-                if shouldShowAdvertisement {
-                    advertisementSection
-                }
             }
              
 
@@ -453,35 +432,6 @@ struct AppListView: View {
         }
         .textCase(.none)
         .transition(.opacity)
-    }
-
-    @available(iOS 15.0, *)
-    var advertisementSection: some View {
-        Section {
-            Button {
-                UIApplication.shared.open(App.advertisementApp.url)
-            } label: {
-                if #available(iOS 16, *) {
-                    AppListCell(app: App.advertisementApp)
-                } else {
-                    AppListCell(app: App.advertisementApp)
-                        .padding(.vertical, 4)
-                }
-            }
-            .foregroundColor(.primary)
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button {
-                    isAdvertisementHidden = true
-                } label: {
-                    Label(NSLocalizedString("Hide", comment: ""), systemImage: "eye.slash")
-                }
-                .tint(.red)
-            }
-        } header: {
-            paddedHeaderFooterText(NSLocalizedString("Advertisement", comment: ""))
-        } footer: {
-            paddedHeaderFooterText(NSLocalizedString("Buy our paid products to support us if you like TrollFools!", comment: ""))
-        }
     }
 
     var footer: some View {
