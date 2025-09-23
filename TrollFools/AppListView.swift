@@ -306,11 +306,13 @@ struct AppListView: View {
                 unsupportedSection
             }
 
+            
             if #available(iOS 15, *) {
                 if shouldShowAdvertisement {
                     advertisementSection
                 }
             }
+             
 
             appSections
         }

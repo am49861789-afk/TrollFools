@@ -131,6 +131,10 @@ struct EjectListView: View {
                     }
             }
         }
+        
+        .toolbar { toolbarContent }
+        .animation(.easeOut, value: isExportingAll)
+        .quickLookPreview($quickLookExport)
     }
 
 
