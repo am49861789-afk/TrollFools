@@ -104,6 +104,7 @@ struct EjectListView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: isReplacing)
+        .quickLookPreview($quickLookExport)
     }
 
     var content: some View {
@@ -131,10 +132,6 @@ struct EjectListView: View {
                     }
             }
         }
-        
-        .toolbar { toolbarContent }
-        .animation(.easeOut, value: isExportingAll)
-        .quickLookPreview($quickLookExport)
     }
 
 
