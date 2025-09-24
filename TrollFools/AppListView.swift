@@ -28,8 +28,15 @@ struct AppListView: View {
     @State var latestVersionString: String?
     @State private var isUnsupportedSheetPresented = false
 
+    @AppStorage("isAdvertisementHiddenV2")
+    var isAdvertisementHidden: Bool = false
+
     @AppStorage("isWarningHidden")
     var isWarningHidden: Bool = false
+
+    var shouldShowAdvertisement: Bool {
+        return false
+    }
 
     var appString: String {
         let appNameString = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "TrollFools"
@@ -109,7 +116,9 @@ struct AppListView: View {
                 }
             }
             .onAppear {
-                
+                if Double.random(in: 0 ..< 1) < 0.1 {
+                    isAdvertisementHidden = false
+                }
             }
                 /*
                 CheckUpdateManager.shared.checkUpdateIfNeeded { latestVersion, _ in
@@ -195,7 +204,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -248,6 +257,7 @@ struct AppListView: View {
             appList.activeScope,
             appList.filter,
             appList.unsupportedCount,
+            shouldShowAdvertisement
         ))
         .listStyle(.insetGrouped)
         .navigationTitle(appList.isSelectorMode ?
@@ -266,16 +276,16 @@ struct AppListView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    appList.filter.showPatchedOnly.toggle()
+                    appList.showPatchedOnly.toggle()
                 } label: {
                     if #available(iOS 15, *) {
-                        Image(systemName: appList.filter.showPatchedOnly
+                        Image(systemName: appList.showPatchedOnly
                             ? "line.3.horizontal.decrease.circle.fill"
-                            : "line.3.horizontal.decrease.circle")
+                            : "line.3.horizontal.decrease.circle") // <-- 补全这一行
                     } else {
-                        Image(systemName: appList.filter.showPatchedOnly
+                        Image(systemName: appList.showPatchedOnly
                             ? "eject.circle.fill"
-                            : "eject.circle")
+                            : "eject.circle") // <-- 补全这一行
                     }
                 }
                 .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
@@ -288,9 +298,16 @@ struct AppListView: View {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
+
+            
+            //if #available(iOS 15, *) {
+              //  if shouldShowAdvertisement {
+                 //   advertisementSection
+             //   }
+          //  }
              
 
             appSections
@@ -299,7 +316,7 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
                     Button {
@@ -322,7 +339,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -434,6 +451,35 @@ struct AppListView: View {
         .transition(.opacity)
     }
 
+    @available(iOS 15.0, *)
+    var advertisementSection: some View {
+        Section {
+            Button {
+                UIApplication.shared.open(App.advertisementApp.url)
+            } label: {
+                if #available(iOS 16, *) {
+                    AppListCell(app: App.advertisementApp)
+                } else {
+                    AppListCell(app: App.advertisementApp)
+                        .padding(.vertical, 4)
+                }
+            }
+            .foregroundColor(.primary)
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button {
+                    isAdvertisementHidden = true
+                } label: {
+                    Label(NSLocalizedString("Hide", comment: ""), systemImage: "eye.slash")
+                }
+                .tint(.red)
+            }
+        } header: {
+            paddedHeaderFooterText(NSLocalizedString("Advertisement", comment: ""))
+        } footer: {
+            paddedHeaderFooterText(NSLocalizedString("Buy our paid products to support us if you like TrollFools!", comment: ""))
+        }
+    }
+
     var footer: some View {
         Group {
             if !appList.isSelectorMode && !appList.filter.isSearching {
@@ -500,7 +546,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {

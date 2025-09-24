@@ -10,6 +10,8 @@ import OrderedCollections
 import SwiftUI
 
 final class AppListModel: ObservableObject {
+    private let showPatchedOnlyKey = "showPatchedOnlyState"
+    @Published var showPatchedOnly: Bool
     enum Scope: Int, CaseIterable {
         case all
         case user
@@ -72,18 +74,28 @@ final class AppListModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init(selectorURL: URL? = nil) {
+        self.showPatchedOnly = UserDefaults.standard.bool(forKey: showPatchedOnlyKey)
+        
         self.selectorURL = selectorURL
         reload()
-
-        Publishers.CombineLatest(
+        
+        Publishers.CombineLatest3(
             $filter,
-            $activeScope
+            $activeScope,
+            $showPatchedOnly
         )
         .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
-        .sink { [weak self] _ in
+        .sink { [weak self] _, _, _ in
             self?.performFilter()
         }
         .store(in: &cancellables)
+        
+        $showPatchedOnly
+            .dropFirst()
+            .sink { newValue in
+                UserDefaults.standard.set(newValue, forKey: self.showPatchedOnlyKey)
+            }
+            .store(in: &cancellables)
 
         applicationChanged
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
@@ -129,7 +141,7 @@ final class AppListModel: ObservableObject {
             }
         }
 
-        if filter.showPatchedOnly {
+        if showPatchedOnly {
             filteredApplications = filteredApplications.filter { $0.isInjected || $0.hasPersistedAssets }
         }
 
