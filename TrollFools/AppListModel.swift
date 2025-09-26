@@ -283,6 +283,11 @@ extension AppListModel {
             let allApps = self._allApplications
 
             for app in allApps {
+                let isBlacklisted = AppStorage<Bool>(wrappedValue: false, "isBlacklisted-\(app.bid)").wrappedValue
+                            if isBlacklisted {
+                                DDLogInfo("Skipping blacklisted app: \(app.bid)", ddlog: InjectorV3.main.logger)
+                                continue 
+                            }
                 let enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
                 let enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
 

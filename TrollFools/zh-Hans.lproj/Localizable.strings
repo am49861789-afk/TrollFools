@@ -337,3 +337,12 @@
 
 /* A button to cancel an action */
 "Cancel" = "取消";
+
+/* A section title for other settings */
+"Other" = "其它";
+
+/* A toggle to add an app to the blacklist */
+"Blacklist" = "黑名单";
+
+/* A description for the blacklist feature */
+"If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "如果开启黑名单，在使用“一键启用所有插件”功能时，此应用将被跳过。";

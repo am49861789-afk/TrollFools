@@ -338,3 +338,12 @@
 
 /* A button to cancel an action */
 "Cancel" = "Cancel";
+
+/* A section title for other settings */
+"Other" = "Other";
+
+/* A toggle to add an app to the blacklist */
+"Blacklist" = "Blacklist";
+
+/* A description for the blacklist feature */
+"If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "If blacklist is enabled, this app will be skipped when enabling all disabled plugins.";

@@ -338,3 +338,12 @@
 
 /* A button to cancel an action */
 "Cancel" = "Hủy";
+
+/* A section title for other settings */
+"Other" = "Khác";
+
+/* A toggle to add an app to the blacklist */
+"Blacklist" = "Danh sách đen";
+
+/* A description for the blacklist feature */
+"If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "Nếu danh sách đen được bật, ứng dụng này sẽ bị bỏ qua khi bật tất cả các plugin đã bị tắt.";
