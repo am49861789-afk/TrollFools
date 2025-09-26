@@ -154,7 +154,7 @@ struct AppListView: View {
                             appList.reload()
                         }
                     },
-                    secondaryButton: .cancel()
+                    secondaryButton: .cancel(Text(NSLocalizedString("Cancel", comment: "")))
                 )
             }
                 /*

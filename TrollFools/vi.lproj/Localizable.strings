@@ -323,3 +323,18 @@
 
 /* For the badge on apps with only disabled plugins */
 "Unsupported Applications" = "Ứng dụng không được hỗ trợ";
+
+/* A prompt to confirm enabling all disabled plug-ins */
+"Enable All Disabled Plug-Ins" = "Bật tất cả các plugin đã tắt";
+
+/* A message explaining the consequence of enabling all disabled plug-ins */
+"This will enable all disabled plug-ins across all applications. This action may take some time." = "Thao tác này sẽ bật tất cả các plugin đã bị tắt trên tất cả các ứng dụng. Quá trình này có thể mất một chút thời gian.";
+
+/* A title indicating that plug-ins are being enabled */
+"Enabling Plug-Ins..." = "Đang bật plugin...";
+
+/* A button to confirm an action */
+"Confirm" = "Xác nhận";
+
+/* A button to cancel an action */
+"Cancel" = "Hủy";
