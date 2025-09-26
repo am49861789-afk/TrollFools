@@ -95,27 +95,26 @@ struct AppListView: View {
         } else {
             content
         }
-            
             if isProcessingAllPlugins {
-                        Color.black.opacity(0.4).ignoresSafeArea()
-                        VStack(spacing: 15) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
-                            Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                                .font(.headline)
-                                .foregroundColor(.white)
-                        }
-                        .padding(25)
-                        .background(Color.black.opacity(0.75))
-                        .cornerRadius(15)
-                        .shadow(radius: 10)
-                        .transition(.opacity)
-                    }
-                }
-                .animation(.easeOut, value: isProcessingAllPlugins)
-            }
-    
+                 Color.black.opacity(0.4).ignoresSafeArea()
+                 VStack(spacing: 15) {
+                     ProgressView()
+                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                         .scaleEffect(1.5)
+                     Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                         .font(.headline)
+                         .foregroundColor(.white)
+                 }
+                 .padding(25)
+                 .background(Color.black.opacity(0.75))
+                 .cornerRadius(15)
+                 .shadow(radius: 10)
+                 .transition(.opacity)
+             }
+         }
+         .animation(.easeOut, value: isProcessingAllPlugins)
+     }
+
 
     var content: some View {
         styledNavigationView
@@ -140,10 +139,10 @@ struct AppListView: View {
                 }
             }
             .onAppear {
-                    if  Double.random(in: 0 ..< 1) < 0.1 {
-                        isAdvertisementHidden =  false
-                    }
+                if Double.random(in: 0 ..< 1) < 0.1 {
+                    isAdvertisementHidden = false
                 }
+            }
             .alert(isPresented: $isEnableAllPluginsAlertPresented) {
                 Alert(
                     title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
@@ -242,7 +241,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -322,19 +321,19 @@ struct AppListView: View {
                 .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
 
                 Button {
-                       appList.filter.showPatchedOnly.toggle()
-                   } label: {
-                       if #available (iOS 15, *) {
-                           Image(systemName: appList.filter.showPatchedOnly
-                           ? "line.3.horizontal.decrease.circle.fill"
-                           : "line.3.horizontal.decrease.circle")
-                       }  else  {
-                           Image(systemName: appList.filter.showPatchedOnly
-                           ? "eject.circle.fill"
-                           : "eject.circle")
-                       }
-                   }
-                   .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
+                    appList.showPatchedOnly.toggle()
+                } label: {
+                    if #available (iOS 15, *) {
+                        Image(systemName: appList.showPatchedOnly
+                        ? "line.3.horizontal.decrease.circle.fill"
+                        : "line.3.horizontal.decrease.circle")
+                    }  else  {
+                        Image(systemName: appList.showPatchedOnly
+                        ? "eject.circle.fill"
+                        : "eject.circle")
+                    }
+                }
+                .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
             }
         }
     }
@@ -344,7 +343,7 @@ struct AppListView: View {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
 
@@ -362,7 +361,7 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
                     Button {
@@ -385,7 +384,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -592,7 +591,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {

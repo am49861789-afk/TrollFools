@@ -11,6 +11,8 @@ import SwiftUI
 import  CocoaLumberjackSwift
 
 final class AppListModel: ObservableObject {
+    private let showPatchedOnlyKey = "showPatchedOnlyState"
+    @Published var showPatchedOnly: Bool
     enum Scope: Int, CaseIterable {
         case all
         case user
@@ -73,18 +75,28 @@ final class AppListModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init(selectorURL: URL? = nil) {
+        self.showPatchedOnly = UserDefaults.standard.bool(forKey: showPatchedOnlyKey)
+        
         self.selectorURL = selectorURL
         reload()
-
-        Publishers.CombineLatest(
+        
+        Publishers.CombineLatest3(
             $filter,
-            $activeScope
+            $activeScope,
+            $showPatchedOnly
         )
         .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
-        .sink { [weak self] _ in
+        .sink { [weak self] _, _, _ in
             self?.performFilter()
         }
         .store(in: &cancellables)
+        
+        $showPatchedOnly
+            .dropFirst()
+            .sink { newValue in
+                UserDefaults.standard.set(newValue, forKey: self.showPatchedOnlyKey)
+            }
+            .store(in: &cancellables)
 
         applicationChanged
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
@@ -130,7 +142,7 @@ final class AppListModel: ObservableObject {
             }
         }
 
-        if filter.showPatchedOnly {
+        if showPatchedOnly {
             filteredApplications = filteredApplications.filter { $0.isInjected || $0.hasPersistedAssets }
         }
 
@@ -275,48 +287,48 @@ extension AppListModel {
                 }
                 return  groupedApps
             }
-            }
+        }
 
-            extension AppListModel {
-                func enableAllDisabledPlugins(completion: @escaping () -> Void) {
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        let allApps = self._allApplications
+  extension AppListModel {
+    func enableAllDisabledPlugins(completion: @escaping () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let allApps = self._allApplications
 
-                        for app in allApps {
-                            let enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
-                            let enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
+            for app in allApps {
+                let enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
+                let enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
 
-                            let persistedPlugInURLs = InjectorV3.main.persistedAssetURLs(bid: app.bid)
+                let persistedPlugInURLs = InjectorV3.main.persistedAssetURLs(bid: app.bid)
 
-                            let plugInsToEnable = persistedPlugInURLs.filter { !enabledNames.contains($0.lastPathComponent) }
+                let plugInsToEnable = persistedPlugInURLs.filter { !enabledNames.contains($0.lastPathComponent) }
 
-                            if plugInsToEnable.isEmpty {
-                                continue
-                            }
+                if plugInsToEnable.isEmpty {
+                    continue
+                }
 
-                            do {
-                                let injector = try InjectorV3(app.url)
-                                if injector.appID.isEmpty { injector.appID = app.bid }
-                                if injector.teamID.isEmpty { injector.teamID = app.teamID }
+                do {
+                    let injector = try InjectorV3(app.url)
+                    if injector.appID.isEmpty { injector.appID = app.bid }
+                    if injector.teamID.isEmpty { injector.teamID = app.teamID }
 
-                                injector.useWeakReference = AppStorage<Bool>(wrappedValue: true, "UseWeakReference-\(app.bid)").wrappedValue
-                                injector.preferMainExecutable = AppStorage<Bool>(wrappedValue: false, "PreferMainExecutable-\(app.bid)").wrappedValue
-                                injector.injectStrategy = AppStorage<InjectorV3.Strategy>(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)").wrappedValue
+                    injector.useWeakReference = AppStorage<Bool>(wrappedValue: true, "UseWeakReference-\(app.bid)").wrappedValue
+                    injector.preferMainExecutable = AppStorage<Bool>(wrappedValue: false, "PreferMainExecutable-\(app.bid)").wrappedValue
+                    injector.injectStrategy = AppStorage<InjectorV3.Strategy>(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)").wrappedValue
 
-                                try injector.inject(plugInsToEnable, shouldPersist: false)
+                    try injector.inject(plugInsToEnable, shouldPersist: false)
 
-                                DispatchQueue.main.async {
-                                    app.reload()
-                                }
-                            } catch {
-                                DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
-                            }
-                        }
-
-                        DispatchQueue.main.async {
-                            completion()
-                        }
+                    DispatchQueue.main.async {
+                        app.reload()
                     }
+                } catch {
+                    DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
                 }
             }
+
+            DispatchQueue.main.async {
+                completion()
+            }
+        }
+    }
+}
 
