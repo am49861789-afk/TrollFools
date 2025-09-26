@@ -52,6 +52,8 @@ final class AppListModel: ObservableObject {
 
     let selectorURL: URL?
     var isSelectorMode: Bool { selectorURL != nil }
+    
+    var isPerformingAppModification = false
 
     @Published var filter = FilterOptions()
     @Published var activeScope: Scope = .all
@@ -108,6 +110,10 @@ final class AppListModel: ObservableObject {
         let darwinCenter = CFNotificationCenterGetDarwinNotifyCenter()
         CFNotificationCenterAddObserver(darwinCenter, Unmanaged.passRetained(self).toOpaque(), { _, observer, _, _, _ in
             guard let observer = Unmanaged<AppListModel>.fromOpaque(observer!).takeUnretainedValue() as AppListModel? else {
+                return
+            }
+
+            guard !observer.isPerformingAppModification else {
                 return
             }
             observer.applicationChanged.send()
@@ -291,6 +297,7 @@ extension AppListModel {
 
 extension AppListModel {
     func enableAllDisabledPlugins(completion: @escaping () -> Void) {
+        self.isPerformingAppModification = true
         DispatchQueue.global(qos: .userInitiated).async {
             let allApps = self._allApplications
             
