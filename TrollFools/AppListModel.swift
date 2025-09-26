@@ -52,9 +52,7 @@ final class AppListModel: ObservableObject {
 
     let selectorURL: URL?
     var isSelectorMode: Bool { selectorURL != nil }
-    
-    var isPerformingAppModification = false
-    private var isAppInBackground = false
+
     @Published var filter = FilterOptions()
     @Published var activeScope: Scope = .all
     @Published var activeScopeApps: OrderedDictionary<String, [App]> = [:]
@@ -72,6 +70,7 @@ final class AppListModel: ObservableObject {
     private let filzaURL = URL(string: "filza://")
 
     @Published var isRebuildNeeded: Bool = false
+    @Published var isProcessingAllPlugins: Bool = false
 
     private let applicationChanged = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
@@ -112,18 +111,8 @@ final class AppListModel: ObservableObject {
             guard let observer = Unmanaged<AppListModel>.fromOpaque(observer!).takeUnretainedValue() as AppListModel? else {
                 return
             }
-            guard observer.isAppInBackground else {
-                return
-            }
             observer.applicationChanged.send()
         }, "com.apple.LaunchServices.ApplicationsChanged" as CFString, nil, .coalesce)
-        
-        NotificationCenter.default.addObserver(forName: UIScene.willDeactivateNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.isAppInBackground = true
-        }
-        NotificationCenter.default.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.isAppInBackground = false
-        }
     }
 
     deinit {
@@ -303,47 +292,45 @@ extension AppListModel {
 
 extension AppListModel {
     func enableAllDisabledPlugins(completion: @escaping () -> Void) {
-        self.isPerformingAppModification = true
         DispatchQueue.global(qos: .userInitiated).async {
             let allApps = self._allApplications
             
-            for app in allApps {
-                let isBlacklisted = AppStorage<Bool>(wrappedValue: false, "isBlacklisted-\(app.bid)").wrappedValue
-                if isBlacklisted {
-                    DDLogInfo("Skipping blacklisted app: \(app.bid)", ddlog: InjectorV3.main.logger)
-                    continue
-                }
-                
-                for app in allApps {
-                    let enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
-                    let enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
-                    
-                    let persistedPlugInURLs = InjectorV3.main.persistedAssetURLs(bid: app.bid)
-                    
-                    let plugInsToEnable = persistedPlugInURLs.filter { !enabledNames.contains($0.lastPathComponent) }
-                    
-                    if plugInsToEnable.isEmpty {
-                        continue
-                    }
-                    
-                    do {
-                        let injector = try InjectorV3(app.url)
-                        if injector.appID.isEmpty { injector.appID = app.bid }
-                        if injector.teamID.isEmpty { injector.teamID = app.teamID }
-                        
-                        injector.useWeakReference = AppStorage<Bool>(wrappedValue: true, "UseWeakReference-\(app.bid)").wrappedValue
-                        injector.preferMainExecutable = AppStorage<Bool>(wrappedValue: false, "PreferMainExecutable-\(app.bid)").wrappedValue
-                        injector.injectStrategy = AppStorage<InjectorV3.Strategy>(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)").wrappedValue
-                        
-                        try injector.inject(plugInsToEnable, shouldPersist: false)
-                        
-                        DispatchQueue.main.async {
-                            app.reload()
+            for  app  in  allApps {
+                        let  isBlacklisted = AppStorage<Bool>(wrappedValue:  false , "isBlacklisted-\(app.bid)").wrappedValue
+                        if  isBlacklisted {
+                            DDLogInfo("Skipping blacklisted app: \(app.bid)", ddlog: InjectorV3.main.logger)
+                            continue
                         }
-                    } catch {
-                        DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
+
+                        let  enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
+                        let  enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
+
+                        let  persistedPlugInURLs = InjectorV3.main.persistedAssetURLs(bid: app.bid)
+
+                        let  plugInsToEnable = persistedPlugInURLs.filter { !enabledNames.contains($0.lastPathComponent) }
+
+                        if  plugInsToEnable.isEmpty {
+                            continue
+                        }
+
+                        do  {
+                            let  injector =  try  InjectorV3(app.url)
+                            if  injector.appID.isEmpty { injector.appID = app.bid }
+                            if  injector.teamID.isEmpty { injector.teamID = app.teamID }
+
+                            injector.useWeakReference = AppStorage<Bool>(wrappedValue:  true , "UseWeakReference-\(app.bid)").wrappedValue
+                            injector.preferMainExecutable = AppStorage<Bool>(wrappedValue:  false , "PreferMainExecutable-\(app.bid)").wrappedValue
+                            injector.injectStrategy = AppStorage<InjectorV3.Strategy>(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)").wrappedValue
+
+                            try  injector.inject(plugInsToEnable, shouldPersist:  false )
+
+                            DispatchQueue.main.async {
+                                app.reload()
+                            }
+                        }  catch  {
+                            DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
+                        }
                     }
-                }
                 
                 DispatchQueue.main.async {
                     completion()
@@ -351,4 +338,4 @@ extension AppListModel {
             }
         }
     }
-}
+

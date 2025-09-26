@@ -23,7 +23,6 @@ struct AppListView: View {
     @State var selectedIndex: String? = nil
     
     @State private var isEnableAllPluginsAlertPresented = false
-    @State private var isProcessingAllPlugins = false
 
     @State var isWarningPresented = false
     @State var temporaryOpenedURL: URLIdentifiable? = nil
@@ -95,24 +94,24 @@ struct AppListView: View {
         } else {
             content
         }
-            if isProcessingAllPlugins {
-                 Color.black.opacity(0.4).ignoresSafeArea()
-                 VStack(spacing: 15) {
-                     ProgressView()
-                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                         .scaleEffect(1.5)
-                     Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                         .font(.headline)
-                         .foregroundColor(.white)
-                 }
-                 .padding(25)
-                 .background(Color.black.opacity(0.75))
-                 .cornerRadius(15)
-                 .shadow(radius: 10)
-                 .transition(.opacity)
-             }
+            if appList.isProcessingAllPlugins {
+                Color.black.opacity(0.4).ignoresSafeArea()
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                    Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .padding(25)
+                .background(Color.black.opacity(0.75))
+                .cornerRadius(15)
+                .shadow(radius: 10)
+                .transition(.opacity)
+            }
          }
-         .animation(.easeOut, value: isProcessingAllPlugins)
+        .animation(.easeOut, value: appList.isProcessingAllPlugins)
      }
 
 
@@ -148,9 +147,9 @@ struct AppListView: View {
                     title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
                     message: Text(NSLocalizedString("This will enable all disabled plug-ins across all applications. This action may take some time.", comment: "")),
                     primaryButton: .destructive(Text(NSLocalizedString("Confirm", comment: ""))) {
-                        isProcessingAllPlugins = true
+                        appList.isProcessingAllPlugins = true 
                         appList.enableAllDisabledPlugins {
-                            isProcessingAllPlugins = false
+                            appList.isProcessingAllPlugins = false
                             appList.reload()
                         }
                     },
@@ -317,7 +316,7 @@ struct AppListView: View {
                 } label: {
                     Image(systemName: "play.circle")
                 }
-                .disabled(isProcessingAllPlugins)
+                .disabled(appList.isProcessingAllPlugins)
                 .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
 
                 Button {

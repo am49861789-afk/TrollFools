@@ -10,6 +10,7 @@ import SwiftUI
 struct OptionView: View {
     let app: App
 
+    @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @State var isImporterPresented = false
     @State var isImporterSelected = false
@@ -103,6 +104,8 @@ struct OptionView: View {
                 } label: {
                     OptionCell(option: .detach, detachCount: numberOfPlugIns)
                 }
+                .disabled(appList.isProcessingAllPlugins)
+                .opacity(appList.isProcessingAllPlugins ? 0.5 : 1.0)
                 .accessibilityLabel(
                     numberOfPlugIns == 0
                         ? NSLocalizedString("Manage", comment: "")

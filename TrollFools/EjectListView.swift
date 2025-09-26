@@ -448,12 +448,6 @@ struct EjectListView: View {
     }
 
     private func togglePlugIn(_ plugIn: InjectedPlugIn) {
-        ejectList.app.appList?.isPerformingAppModification = true
-        defer {
-            DispatchQueue.main.async {
-                self.ejectList.app.appList?.isPerformingAppModification = false
-            }
-        }
         var logFileURL: URL?
 
         do {
