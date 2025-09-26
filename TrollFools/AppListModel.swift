@@ -54,7 +54,7 @@ final class AppListModel: ObservableObject {
     var isSelectorMode: Bool { selectorURL != nil }
     
     var isPerformingAppModification = false
-
+    private var isAppInBackground = false
     @Published var filter = FilterOptions()
     @Published var activeScope: Scope = .all
     @Published var activeScopeApps: OrderedDictionary<String, [App]> = [:]
@@ -112,12 +112,18 @@ final class AppListModel: ObservableObject {
             guard let observer = Unmanaged<AppListModel>.fromOpaque(observer!).takeUnretainedValue() as AppListModel? else {
                 return
             }
-
-            guard !observer.isPerformingAppModification else {
+            guard observer.isAppInBackground else {
                 return
             }
             observer.applicationChanged.send()
         }, "com.apple.LaunchServices.ApplicationsChanged" as CFString, nil, .coalesce)
+        
+        NotificationCenter.default.addObserver(forName: UIScene.willDeactivateNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.isAppInBackground = true
+        }
+        NotificationCenter.default.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.isAppInBackground = false
+        }
     }
 
     deinit {
