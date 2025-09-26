@@ -21,6 +21,9 @@ struct AppListView: View {
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
     @State var selectedIndex: String? = nil
+    
+    @State private var isEnableAllPluginsAlertPresented = false
+    @State private var isProcessingAllPlugins = false
 
     @State var isWarningPresented = false
     @State var temporaryOpenedURL: URLIdentifiable? = nil
@@ -60,14 +63,15 @@ struct AppListView: View {
         )
     }
 
-    var body: some View {
-        if #available(iOS 15, *) {
-            content
+    var  body:  some  View {
+        ZStack {
+            if #available (iOS 15, *) {
+                content
                 .alert(
                     NSLocalizedString("Notice", comment: ""),
                     isPresented: $isWarningPresented,
                     presenting: temporaryOpenedURL
-                ) { result in
+                ) { result  in
                     Button {
                         selectorOpenedURL = result
                     } label: {
@@ -91,7 +95,27 @@ struct AppListView: View {
         } else {
             content
         }
-    }
+            
+            if isProcessingAllPlugins {
+                        Color.black.opacity(0.4).ignoresSafeArea()
+                        VStack(spacing: 15) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                            Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .padding(25)
+                        .background(Color.black.opacity(0.75))
+                        .cornerRadius(15)
+                        .shadow(radius: 10)
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut, value: isProcessingAllPlugins)
+            }
+    
 
     var content: some View {
         styledNavigationView
@@ -116,9 +140,23 @@ struct AppListView: View {
                 }
             }
             .onAppear {
-                if Double.random(in: 0 ..< 1) < 0.1 {
-                    isAdvertisementHidden = false
+                    if  Double.random(in: 0 ..< 1) < 0.1 {
+                        isAdvertisementHidden =  false
+                    }
                 }
+            .alert(isPresented: $isEnableAllPluginsAlertPresented) {
+                Alert(
+                    title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
+                    message: Text(NSLocalizedString("This will enable all disabled plug-ins across all applications. This action may take some time.", comment: "")),
+                    primaryButton: .destructive(Text(NSLocalizedString("Confirm", comment: ""))) {
+                        isProcessingAllPlugins = true
+                        appList.enableAllDisabledPlugins {
+                            isProcessingAllPlugins = false
+                            appList.reload()
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
             }
                 /*
                 CheckUpdateManager.shared.checkUpdateIfNeeded { latestVersion, _ in
@@ -204,7 +242,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -267,28 +305,36 @@ struct AppListView: View {
         .navigationBarTitleDisplayMode(appList.isSelectorMode ? .inline : .automatic)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                if appList.isSelectorMode, let selectorURL = appList.selectorURL {
+                if  appList.isSelectorMode,  let  selectorURL = appList.selectorURL {
                     VStack {
                         Text(selectorURL.lastPathComponent).font(.headline)
                         Text(NSLocalizedString("Select Application to Inject", comment: "")).font(.caption)
                     }
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button {
-                    appList.showPatchedOnly.toggle()
+                    isEnableAllPluginsAlertPresented = true
                 } label: {
-                    if #available(iOS 15, *) {
-                        Image(systemName: appList.showPatchedOnly
-                            ? "line.3.horizontal.decrease.circle.fill"
-                            : "line.3.horizontal.decrease.circle") // <-- 补全这一行
-                    } else {
-                        Image(systemName: appList.showPatchedOnly
-                            ? "eject.circle.fill"
-                            : "eject.circle") // <-- 补全这一行
-                    }
+                    Image(systemName: "play.circle")
                 }
-                .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
+                .disabled(isProcessingAllPlugins)
+                .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
+
+                Button {
+                       appList.filter.showPatchedOnly.toggle()
+                   } label: {
+                       if #available (iOS 15, *) {
+                           Image(systemName: appList.filter.showPatchedOnly
+                           ? "line.3.horizontal.decrease.circle.fill"
+                           : "line.3.horizontal.decrease.circle")
+                       }  else  {
+                           Image(systemName: appList.filter.showPatchedOnly
+                           ? "eject.circle.fill"
+                           : "eject.circle")
+                       }
+                   }
+                   .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
             }
         }
     }
@@ -298,7 +344,7 @@ struct AppListView: View {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
 
@@ -316,7 +362,7 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
                     Button {
@@ -339,7 +385,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -546,7 +592,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {
