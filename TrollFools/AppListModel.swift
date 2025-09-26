@@ -11,8 +11,6 @@ import SwiftUI
 import  CocoaLumberjackSwift
 
 final class AppListModel: ObservableObject {
-    private let showPatchedOnlyKey = "showPatchedOnlyState"
-    @Published var showPatchedOnly: Bool
     enum Scope: Int, CaseIterable {
         case all
         case user
@@ -70,34 +68,25 @@ final class AppListModel: ObservableObject {
     private let filzaURL = URL(string: "filza://")
 
     @Published var isRebuildNeeded: Bool = false
-    @Published var isProcessingAllPlugins: Bool = false
+    
+    @Published var isProcessingAllPlugins: Bool = false 
 
     private let applicationChanged = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
 
     init(selectorURL: URL? = nil) {
-        self.showPatchedOnly = UserDefaults.standard.bool(forKey: showPatchedOnlyKey)
-        
         self.selectorURL = selectorURL
         reload()
-        
-        Publishers.CombineLatest3(
+
+        Publishers.CombineLatest(
             $filter,
-            $activeScope,
-            $showPatchedOnly
+            $activeScope
         )
         .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
-        .sink { [weak self] _, _, _ in
+        .sink { [weak self] _ in
             self?.performFilter()
         }
         .store(in: &cancellables)
-        
-        $showPatchedOnly
-            .dropFirst()
-            .sink { newValue in
-                UserDefaults.standard.set(newValue, forKey: self.showPatchedOnlyKey)
-            }
-            .store(in: &cancellables)
 
         applicationChanged
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
@@ -143,7 +132,7 @@ final class AppListModel: ObservableObject {
             }
         }
 
-        if showPatchedOnly {
+        if filter.showPatchedOnly {
             filteredApplications = filteredApplications.filter { $0.isInjected || $0.hasPersistedAssets }
         }
 
@@ -294,7 +283,7 @@ extension AppListModel {
     func enableAllDisabledPlugins(completion: @escaping () -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let allApps = self._allApplications
-            
+
             for  app  in  allApps {
                         let  isBlacklisted = AppStorage<Bool>(wrappedValue:  false , "isBlacklisted-\(app.bid)").wrappedValue
                         if  isBlacklisted {
@@ -331,11 +320,10 @@ extension AppListModel {
                             DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
                         }
                     }
-                
-                DispatchQueue.main.async {
-                    completion()
-                }
+
+            DispatchQueue.main.async {
+                completion()
             }
         }
     }
-
+}

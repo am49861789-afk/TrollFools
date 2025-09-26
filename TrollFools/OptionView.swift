@@ -104,7 +104,7 @@ struct OptionView: View {
                 } label: {
                     OptionCell(option: .detach, detachCount: numberOfPlugIns)
                 }
-                .disabled(appList.isProcessingAllPlugins)
+                .disabled(appList.isProcessingAllPlugins) 
                 .opacity(appList.isProcessingAllPlugins ? 0.5 : 1.0)
                 .accessibilityLabel(
                     numberOfPlugIns == 0

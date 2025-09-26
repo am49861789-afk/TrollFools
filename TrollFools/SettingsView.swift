@@ -21,9 +21,9 @@ struct SettingsView: View {
     @AppStorage var useWeakReference: Bool
     @AppStorage var preferMainExecutable: Bool
     @AppStorage var injectStrategy: InjectorV3.Strategy
-
-    @AppStorage var isBlacklisted: Bool
     
+    @AppStorage var isBlacklisted: Bool
+
     @StateObject var viewControllerHost = ViewControllerHost()
 
     var body: some View {

@@ -37,7 +37,11 @@ struct AppListView: View {
     var isWarningHidden: Bool = false
 
     var shouldShowAdvertisement: Bool {
-        return false
+        !isAdvertisementHidden &&
+            !appList.filter.isSearching &&
+            !appList.filter.showPatchedOnly &&
+            !appList.isRebuildNeeded &&
+            !appList.isSelectorMode
     }
 
     var appString: String {
@@ -94,6 +98,7 @@ struct AppListView: View {
         } else {
             content
         }
+            
             if appList.isProcessingAllPlugins {
                 Color.black.opacity(0.4).ignoresSafeArea()
                 VStack(spacing: 15) {
@@ -110,10 +115,9 @@ struct AppListView: View {
                 .shadow(radius: 10)
                 .transition(.opacity)
             }
-         }
-        .animation(.easeOut, value: appList.isProcessingAllPlugins)
-     }
-
+                }
+               .animation(.easeOut, value: appList.isProcessingAllPlugins)
+            }
 
     var content: some View {
         styledNavigationView
@@ -153,7 +157,7 @@ struct AppListView: View {
                             appList.reload()
                         }
                     },
-                    secondaryButton: .cancel(Text(NSLocalizedString("Cancel", comment: "")))
+                    secondaryButton: .cancel()
                 )
             }
                 /*
@@ -240,7 +244,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -310,6 +314,7 @@ struct AppListView: View {
                     }
                 }
             }
+
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button {
                     isEnableAllPluginsAlertPresented = true
@@ -320,14 +325,14 @@ struct AppListView: View {
                 .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
 
                 Button {
-                    appList.showPatchedOnly.toggle()
+                    appList.filter.showPatchedOnly.toggle()
                 } label: {
                     if #available (iOS 15, *) {
-                        Image(systemName: appList.showPatchedOnly
+                        Image(systemName: appList.filter.showPatchedOnly
                         ? "line.3.horizontal.decrease.circle.fill"
                         : "line.3.horizontal.decrease.circle")
                     }  else  {
-                        Image(systemName: appList.showPatchedOnly
+                        Image(systemName: appList.filter.showPatchedOnly
                         ? "eject.circle.fill"
                         : "eject.circle")
                     }
@@ -336,22 +341,22 @@ struct AppListView: View {
             }
         }
     }
-
+    
     var allAppGroup: some View {
         Group {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
 
             
-            //if #available(iOS 15, *) {
-              //  if shouldShowAdvertisement {
-                 //   advertisementSection
-             //   }
-          //  }
+            if #available(iOS 15, *) {
+                if shouldShowAdvertisement {
+                    advertisementSection
+                }
+            }
              
 
             appSections
@@ -360,7 +365,7 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
                     Button {
@@ -383,7 +388,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -590,7 +595,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {
