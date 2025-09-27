@@ -13,11 +13,6 @@ import SwiftUIIntrospect
 typealias Scope = AppListModel.Scope
 
 struct AppListView: View {
-    
-    @AppStorage("isAutoEnableOnUpdateEnabled") private var isAutoEnableOnUpdateEnabled: Bool = false
-    @State private var isAutoEnableEnabledAlertPresented = false
-    @State private var isAutoEnableDisabledAlertPresented = false
-    
     let isPad: Bool = UIDevice.current.userInterfaceIdiom == .pad
 
     @StateObject var searchViewModel = AppListSearchModel()
@@ -40,45 +35,15 @@ struct AppListView: View {
 
     @AppStorage("isWarningHidden")
     var isWarningHidden: Bool = false
+    
+    @AppStorage("autoEnableOnUpdate") private var autoEnableOnUpdate: Bool = false
+
+    @State private var isShowingAutoEnableAlert = false
+    @State private var autoEnableAlertTitle = ""
+    @State private var autoEnableAlertMessage = ""
 
     var shouldShowAdvertisement: Bool {
         return false
-    }
-    
-    private struct EnablePluginsButtonView: View {
-        @EnvironmentObject var appList: AppListModel
-        
-        @Binding var isEnableAllPluginsAlertPresented: Bool
-        @Binding var isAutoEnableEnabledAlertPresented: Bool
-        @Binding var isAutoEnableDisabledAlertPresented: Bool
-        
-        @AppStorage("isAutoEnableOnUpdateEnabled") private var isAutoEnableOnUpdateEnabled: Bool = false
-        
-        var body: some View {
-            let longPressGesture = LongPressGesture(minimumDuration: 2.0)
-                .onEnded { _ in
-                    if isAutoEnableOnUpdateEnabled {
-                        isAutoEnableDisabledAlertPresented = true
-                    } else {
-                        isAutoEnableOnUpdateEnabled = true
-                        isAutoEnableEnabledAlertPresented = true
-                    }
-                }
-
-            let tapGesture = TapGesture()
-                .onEnded {
-                    isEnableAllPluginsAlertPresented = true
-                }
-
-            let combinedGesture = longPressGesture.exclusively(before: tapGesture)
-
-            Image(systemName: "play.circle")
-                .gesture(
-                    appList.isProcessingAllPlugins ? nil : combinedGesture
-                )
-                .foregroundColor(appList.isProcessingAllPlugins ? .secondary : .accentColor)
-                .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
-        }
     }
 
     var appString: String {
@@ -135,13 +100,13 @@ struct AppListView: View {
         } else {
             content
         }
-            if appList.isProcessingAllPlugins {
+            if appList.isProcessingAllPlugins || appList.isProcessingVersionCheck {
                 Color.black.opacity(0.4).ignoresSafeArea()
                 VStack(spacing: 15) {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(1.5)
-                    Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                    Text(appList.processingStatusText)
                         .font(.headline)
                         .foregroundColor(.white)
                 }
@@ -151,51 +116,14 @@ struct AppListView: View {
                 .shadow(radius: 10)
                 .transition(.opacity)
             }
-            
-            if appList.isCheckingForUpdates {
-                Color.black.opacity(0.4).ignoresSafeArea()
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-                    Text(appList.updateCheckStatus)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(30)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(15)
-                .shadow(radius: 10)
-                .transition(.opacity)
-            }
-            
-         }
-        .animation(.easeOut, value: appList.isProcessingAllPlugins || appList.isCheckingForUpdates)
-     }
-    
+        }
+        
+        .animation(.easeOut, value: appList.isProcessingAllPlugins || appList.isProcessingVersionCheck) 
+    }
+
     var content: some View {
         styledNavigationView
             .animation(.easeOut, value: appList.activeScopeApps.keys)
-        
-            .alert(isPresented: $isAutoEnableEnabledAlertPresented) {
-                Alert(
-                    title: Text(NSLocalizedString("开启成功", comment: "")),
-                    message: Text(NSLocalizedString("当检测到应用版本变化时，将自动为您重新启用插件。", comment: "")),
-                    dismissButton: .default(Text("好的"))
-                )
-            }
-            .alert(isPresented: $isAutoEnableDisabledAlertPresented) {
-                Alert(
-                    title: Text(NSLocalizedString("关闭功能", comment: "")),
-                    message: Text(NSLocalizedString("您要关闭“版本变化时自动启用插件”的功能吗？", comment: "")),
-                    primaryButton: .destructive(Text(NSLocalizedString("关闭", comment: ""))) {
-                        isAutoEnableOnUpdateEnabled = false
-                    },
-                    secondaryButton: .cancel(Text("取消"))
-                )
-            }
-        
             .sheet(item: $selectorOpenedURL) { urlWrapper in
                 AppListView()
                     .environmentObject(AppListModel(selectorURL: urlWrapper.url))
@@ -216,9 +144,6 @@ struct AppListView: View {
                 }
             }
             .onAppear {
-                if isAutoEnableOnUpdateEnabled && !appList.isSelectorMode {
-                    appList.checkForAppUpdatesAndReEnablePlugins()
-                }
                 if Double.random(in: 0 ..< 1) < 0.1 {
                     isAdvertisementHidden = false
                 }
@@ -228,7 +153,8 @@ struct AppListView: View {
                     title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
                     message: Text(NSLocalizedString("This will enable all disabled plug-ins across all applications. This action may take some time.", comment: "")),
                     primaryButton: .destructive(Text(NSLocalizedString("Confirm", comment: ""))) {
-                        appList.isProcessingAllPlugins = true 
+                        appList.processingStatusText = NSLocalizedString("Enabling Plug-Ins...", comment: "")
+                        appList.isProcessingAllPlugins = true
                         appList.enableAllDisabledPlugins {
                             appList.isProcessingAllPlugins = false
                             appList.reload()
@@ -258,7 +184,16 @@ struct AppListView: View {
                     .navigationViewStyle(.stack)
             }
         }
+        
+        .onAppear {
+            appList.checkForUpdatesAndReEnablePlugins()
+        }
+        .alert(isPresented: $isShowingAutoEnableAlert) {
+            Alert(title: Text(autoEnableAlertTitle), message: Text(autoEnableAlertMessage), dismissButton: .default(Text("OK")))
+        }
     }
+    
+
 
     var navigationView: some View {
         NavigationView {
@@ -391,14 +326,32 @@ struct AppListView: View {
                     }
                 }
             }
-            
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                EnablePluginsButtonView(
-                    isEnableAllPluginsAlertPresented: $isEnableAllPluginsAlertPresented,
-                    isAutoEnableEnabledAlertPresented: $isAutoEnableEnabledAlertPresented,
-                    isAutoEnableDisabledAlertPresented: $isAutoEnableDisabledAlertPresented
-                )
+                Button {
 
+                    appList.processingStatusText = NSLocalizedString("Enabling Plug-Ins...", comment: "")
+                    isEnableAllPluginsAlertPresented = true
+                } label: {
+                    Image(systemName: "play.circle")
+                }
+                .disabled(appList.isProcessingAllPlugins || appList.isProcessingVersionCheck)
+                .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
+                .gesture(
+                    LongPressGesture(minimumDuration: 2.0)
+                        .onEnded { _ in
+
+                            autoEnableOnUpdate.toggle()
+                            if autoEnableOnUpdate {
+                                autoEnableAlertTitle = NSLocalizedString("Feature Enabled", comment: "")
+                                autoEnableAlertMessage = NSLocalizedString("Auto-enable on app update has been turned ON.", comment: "")
+                            } else {
+                                autoEnableAlertTitle = NSLocalizedString("Feature Disabled", comment: "")
+                                autoEnableAlertMessage = NSLocalizedString("Auto-enable on app update has been turned OFF.", comment: "")
+                            }
+                            isShowingAutoEnableAlert = true
+                        }
+                )
+                
                 Button {
                     appList.showPatchedOnly.toggle()
                 } label: {
