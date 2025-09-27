@@ -44,6 +44,42 @@ struct AppListView: View {
     var shouldShowAdvertisement: Bool {
         return false
     }
+    
+    private struct EnablePluginsButtonView: View {
+        @EnvironmentObject var appList: AppListModel
+        
+        @Binding var isEnableAllPluginsAlertPresented: Bool
+        @Binding var isAutoEnableEnabledAlertPresented: Bool
+        @Binding var isAutoEnableDisabledAlertPresented: Bool
+        
+        @AppStorage("isAutoEnableOnUpdateEnabled") private var isAutoEnableOnUpdateEnabled: Bool = false
+        
+        var body: some View {
+            let longPressGesture = LongPressGesture(minimumDuration: 2.0)
+                .onEnded { _ in
+                    if isAutoEnableOnUpdateEnabled {
+                        isAutoEnableDisabledAlertPresented = true
+                    } else {
+                        isAutoEnableOnUpdateEnabled = true
+                        isAutoEnableEnabledAlertPresented = true
+                    }
+                }
+
+            let tapGesture = TapGesture()
+                .onEnded {
+                    isEnableAllPluginsAlertPresented = true
+                }
+
+            let combinedGesture = longPressGesture.exclusively(before: tapGesture)
+
+            Image(systemName: "play.circle")
+                .gesture(
+                    appList.isProcessingAllPlugins ? nil : combinedGesture
+                )
+                .foregroundColor(appList.isProcessingAllPlugins ? .secondary : .accentColor)
+                .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
+        }
+    }
 
     var appString: String {
         let appNameString = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "TrollFools"
@@ -355,24 +391,13 @@ struct AppListView: View {
                     }
                 }
             }
+            
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Image(systemName: "play.circle")
-                    .foregroundColor(appList.isProcessingAllPlugins ? .gray : .accentColor)
-                    .onTapGesture {
-                        if !appList.isProcessingAllPlugins {
-                            isEnableAllPluginsAlertPresented = true
-                        }
-                    }
-                    .onLongPressGesture(minimumDuration: 2.0) {
-                        if isAutoEnableOnUpdateEnabled {
-                            isAutoEnableDisabledAlertPresented = true
-                        } else {
-                            isAutoEnableOnUpdateEnabled = true
-                            isAutoEnableEnabledAlertPresented = true
-                        }
-                    }
-                    .disabled(appList.isProcessingAllPlugins)
-                    .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
+                EnablePluginsButtonView(
+                    isEnableAllPluginsAlertPresented: $isEnableAllPluginsAlertPresented,
+                    isAutoEnableEnabledAlertPresented: $isAutoEnableEnabledAlertPresented,
+                    isAutoEnableDisabledAlertPresented: $isAutoEnableDisabledAlertPresented
+                )
 
                 Button {
                     appList.showPatchedOnly.toggle()
