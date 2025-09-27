@@ -339,17 +339,18 @@ struct AppListView: View {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Label(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""), systemImage: "play.circle")
                     .foregroundColor(.accentColor)
-                    // [修改开始]
-                    // 使用 .simultaneousGesture 来定义双击手势，这会确保它能和单击手势共存而不会失败
                     .simultaneousGesture(
                         TapGesture(count: 2)
                             .onEnded { _ in
                                 self.singleTapWorkItem?.cancel()
-                                isAutoEnableOnUpdateEnabled.toggle()
-                                if isAutoEnableOnUpdateEnabled {
-                                    autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已开启", comment: "")
-                                } else {
-                                    autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已关闭", comment: "")
+
+                                DispatchQueue.main.async {
+                                    isAutoEnableOnUpdateEnabled.toggle()
+                                    if isAutoEnableOnUpdateEnabled {
+                                        autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已开启", comment: "")
+                                    } else {
+                                        autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已关闭", comment: "")
+                                    }
                                 }
                             }
                     )
@@ -358,7 +359,6 @@ struct AppListView: View {
                             isEnableAllPluginsAlertPresented = true
                         }
                         self.singleTapWorkItem = workItem
-
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
                     }
 
