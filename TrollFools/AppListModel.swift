@@ -11,6 +11,13 @@ import SwiftUI
 import  CocoaLumberjackSwift
 
 final class AppListModel: ObservableObject {
+    @CodableStorage(key: "lastKnownAppVersions", defaultValue: [:])
+    private var lastKnownAppVersions: [String: String]
+
+    @Published var isCheckingForUpdates: Bool = false
+    @Published var updateCheckStatus: String = ""
+    private let showPatchedOnlyKey = "showPatchedOnlyState"
+    @Published var showPatchedOnly: Bool
     enum Scope: Int, CaseIterable {
         case all
         case user
@@ -68,25 +75,34 @@ final class AppListModel: ObservableObject {
     private let filzaURL = URL(string: "filza://")
 
     @Published var isRebuildNeeded: Bool = false
-    
-    @Published var isProcessingAllPlugins: Bool = false 
+    @Published var isProcessingAllPlugins: Bool = false
 
     private let applicationChanged = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
 
     init(selectorURL: URL? = nil) {
+        self.showPatchedOnly = UserDefaults.standard.bool(forKey: showPatchedOnlyKey)
+        
         self.selectorURL = selectorURL
         reload()
-
-        Publishers.CombineLatest(
+        
+        Publishers.CombineLatest3(
             $filter,
-            $activeScope
+            $activeScope,
+            $showPatchedOnly
         )
         .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
-        .sink { [weak self] _ in
+        .sink { [weak self] _, _, _ in
             self?.performFilter()
         }
         .store(in: &cancellables)
+        
+        $showPatchedOnly
+            .dropFirst()
+            .sink { newValue in
+                UserDefaults.standard.set(newValue, forKey: self.showPatchedOnlyKey)
+            }
+            .store(in: &cancellables)
 
         applicationChanged
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
@@ -132,7 +148,7 @@ final class AppListModel: ObservableObject {
             }
         }
 
-        if filter.showPatchedOnly {
+        if showPatchedOnly {
             filteredApplications = filteredApplications.filter { $0.isInjected || $0.hasPersistedAssets }
         }
 
@@ -283,7 +299,7 @@ extension AppListModel {
     func enableAllDisabledPlugins(completion: @escaping () -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let allApps = self._allApplications
-
+            
             for  app  in  allApps {
                         let  isBlacklisted = AppStorage<Bool>(wrappedValue:  false , "isBlacklisted-\(app.bid)").wrappedValue
                         if  isBlacklisted {
@@ -320,10 +336,93 @@ extension AppListModel {
                             DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
                         }
                     }
+                
+                DispatchQueue.main.async {
+                    completion()
+                }
+            }
+        }
+
+    func reEnablePluginsForApp(_ app: App) {
+        let isBlacklisted = AppStorage<Bool>(wrappedValue: false, "isBlacklisted-\(app.bid)").wrappedValue
+        if isBlacklisted {
+            DDLogInfo("Skipping blacklisted app for auto-re-enable: \(app.bid)", ddlog: InjectorV3.main.logger)
+            return
+        }
+
+        let enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
+        let enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
+        let persistedPlugInURLs = InjectorV3.main.persistedAssetURLs(bid: app.bid)
+        let plugInsToEnable = persistedPlugInURLs.filter { !enabledNames.contains($0.lastPathComponent) }
+
+        if plugInsToEnable.isEmpty {
+        }
+
+        DDLogInfo("Re-enabling plugins for updated app: \(app.bid)", ddlog: InjectorV3.main.logger)
+
+        do {
+            let injector = try InjectorV3(app.url)
+            if injector.appID.isEmpty { injector.appID = app.bid }
+            if injector.teamID.isEmpty { injector.teamID = app.teamID }
+            injector.useWeakReference = AppStorage<Bool>(wrappedValue: true, "UseWeakReference-\(app.bid)").wrappedValue
+            injector.preferMainExecutable = AppStorage<Bool>(wrappedValue: false, "PreferMainExecutable-\(app.bid)").wrappedValue
+            injector.injectStrategy = AppStorage<InjectorV3.Strategy>(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)").wrappedValue
+            try injector.inject(plugInsToEnable, shouldPersist: false)
+            DispatchQueue.main.async {
+                app.reload()
+            }
+        } catch {
+            DDLogError("Failed to auto re-enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
+        }
+    }
+    
+    func checkForAppUpdatesAndReEnablePlugins() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            let allApps = self._allApplications 
+            guard !allApps.isEmpty else { return }
+
+            var appsToUpdate: [App] = []
+
+            for app in allApps {
+                guard let currentVersion = app.version else { continue }
+                let lastVersion = self.lastKnownAppVersions[app.bid]
+
+                if let lastVersion = lastVersion {
+                    if currentVersion != lastVersion {
+                        appsToUpdate.append(app)
+                    }
+                } else {
+
+                    self.lastKnownAppVersions[app.bid] = currentVersion
+                }
+            }
+
+            if appsToUpdate.isEmpty {
+                return
+            }
 
             DispatchQueue.main.async {
-                completion()
+                self.isCheckingForUpdates = true
+            }
+            
+            for (index, app) in appsToUpdate.enumerated() {
+                let statusMessage = String(format: NSLocalizedString("检测到应用版本变化，正在重新启用插件\n%@ (%d/%d)", comment: ""), app.name, index + 1, appsToUpdate.count)
+                DispatchQueue.main.async {
+                    self.updateCheckStatus = statusMessage
+                }
+                
+                self.reEnablePluginsForApp(app)
+                self.lastKnownAppVersions[app.bid] = app.version!
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                self.isCheckingForUpdates = false
+                self.updateCheckStatus = ""
+                self.reload() 
             }
         }
     }
 }
+
