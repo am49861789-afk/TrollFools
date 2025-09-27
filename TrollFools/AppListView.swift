@@ -337,10 +337,11 @@ struct AppListView: View {
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Label(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""), systemImage: "play.circle")
+                    .foregroundColor(.accentColor)
                     .onTapGesture {
                         isEnableAllPluginsAlertPresented = true
                     }
-                    .onLongPressGesture(minimumDuration: 2.0) {
+                    .onTapGesture(count: 2) {
                         isAutoEnableOnUpdateEnabled.toggle()
                         if isAutoEnableOnUpdateEnabled {
                             autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已开启", comment: "")
