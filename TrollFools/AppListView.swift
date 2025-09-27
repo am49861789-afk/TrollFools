@@ -333,24 +333,30 @@ struct AppListView: View {
                     isEnableAllPluginsAlertPresented = true
                 } label: {
                     Image(systemName: "play.circle")
-                }
-                .disabled(appList.isProcessingAllPlugins || appList.isProcessingVersionCheck)
-                .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
-                .gesture(
-                    LongPressGesture(minimumDuration: 2.0)
-                        .onEnded { _ in
-
-                            autoEnableOnUpdate.toggle()
-                            if autoEnableOnUpdate {
-                                autoEnableAlertTitle = NSLocalizedString("Feature Enabled", comment: "")
-                                autoEnableAlertMessage = NSLocalizedString("Auto-enable on app update has been turned ON.", comment: "")
-                            } else {
-                                autoEnableAlertTitle = NSLocalizedString("Feature Disabled", comment: "")
-                                autoEnableAlertMessage = NSLocalizedString("Auto-enable on app update has been turned OFF.", comment: "")
-                            }
-                            isShowingAutoEnableAlert = true
+                        .foregroundColor(
+                            (appList.isProcessingAllPlugins || appList.isProcessingVersionCheck) ? .secondary : .accentColor
+                        )
+                        .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
+                        .onTapGesture {
+                            guard !(appList.isProcessingAllPlugins || appList.isProcessingVersionCheck) else { return }
+                            appList.processingStatusText = NSLocalizedString("Enabling Plug-Ins...", comment: "")
+                            isEnableAllPluginsAlertPresented = true
                         }
-                )
+                        .gesture(
+                            LongPressGesture(minimumDuration: 2.0)
+                                .onEnded { _ in
+                                    guard !(appList.isProcessingAllPlugins || appList.isProcessingVersionCheck) else { return }
+                                    autoEnableOnUpdate.toggle()
+                                    if autoEnableOnUpdate {
+                                        autoEnableAlertTitle = NSLocalizedString("Feature Enabled", comment: "")
+                                        autoEnableAlertMessage = NSLocalizedString("Auto-enable on app update has been turned ON.", comment: "")
+                                    } else {
+                                        autoEnableAlertTitle = NSLocalizedString("Feature Disabled", comment: "")
+                                        autoEnableAlertMessage = NSLocalizedString("Auto-enable on app update has been turned OFF.", comment: "")
+                                    }
+                                    isShowingAutoEnableAlert = true
+                                }
+                        )
                 
                 Button {
                     appList.showPatchedOnly.toggle()
@@ -368,6 +374,7 @@ struct AppListView: View {
                 .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
             }
         }
+    }
     }
 
     var allAppGroup: some View {
