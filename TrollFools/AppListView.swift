@@ -39,6 +39,7 @@ struct AppListView: View {
     @AppStorage("isAutoEnableOnUpdateEnabled")
     private var isAutoEnableOnUpdateEnabled: Bool = false
     @State private var autoEnableAlertMessage: String?
+    @State private var singleTapWorkItem: DispatchWorkItem?
 
     var shouldShowAdvertisement: Bool {
         return false
@@ -338,16 +339,22 @@ struct AppListView: View {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Label(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""), systemImage: "play.circle")
                     .foregroundColor(.accentColor)
-                    .onTapGesture {
-                        isEnableAllPluginsAlertPresented = true
-                    }
                     .onTapGesture(count: 2) {
+                        self.singleTapWorkItem?.cancel()
+
                         isAutoEnableOnUpdateEnabled.toggle()
                         if isAutoEnableOnUpdateEnabled {
                             autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已开启", comment: "")
                         } else {
                             autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已关闭", comment: "")
                         }
+                    }
+                    .onTapGesture(count: 1) {
+                        let workItem = DispatchWorkItem {
+                            isEnableAllPluginsAlertPresented = true
+                        }
+                        self.singleTapWorkItem = workItem
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
                     }
                 .disabled(appList.isProcessingAllPlugins)
                 .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
