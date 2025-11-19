@@ -116,7 +116,7 @@ extension App {
         if isPinnedToHome {
             pinnedIDs.removeAll { $0 == bid }
         } else {
-            // 限制最多显示 3 个，避免挤占系统菜单
+            // 限制最多显示 3 个
             if pinnedIDs.count >= 3 { return }
             pinnedIDs.append(bid)
         }
@@ -136,13 +136,13 @@ extension App {
             // 使用系统私有 API 获取准确的应用名称
             let name = LSApplicationProxy(forIdentifier: id)?.localizedName() ?? id
             
-            let icon = UIApplicationShortcutIcon(systemImageName: "gear") // 图标设为齿轮
+            let icon = UIApplicationShortcutIcon(systemImageName: "gear")
             let item = UIApplicationShortcutItem(
                 type: "wiki.qaq.TrollFools.openManagedApp", // 唯一的动作标识符
                 localizedTitle: name,
                 localizedSubtitle: nil,
                 icon: icon,
-                userInfo: ["targetBid": id as NSSecureCoding] // 关键：把 ID 存入
+                userInfo: ["targetBid": id as NSSecureCoding] // 把 ID 存入 userInfo
             )
             shortcuts.append(item)
         }

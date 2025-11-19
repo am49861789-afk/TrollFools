@@ -124,7 +124,7 @@ struct AppListCell: View {
         } label: {
             Label(NSLocalizedString("Launch", comment: ""), systemImage: "command")
         }
-        
+
         // --- 插入开始 ---
                     Button {
                         app.toggleHomeShortcut()
@@ -137,7 +137,6 @@ struct AppListCell: View {
                     }
                     // --- 插入结束 ---
         
-
         if AppListModel.hasTrollStore && app.isAllowedToAttachOrDetach {
             if app.isDetached {
                 Button {

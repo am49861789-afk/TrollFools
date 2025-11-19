@@ -19,10 +19,10 @@ struct AppListView: View {
     @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
-    // [新增]
+    // [新增] 控制跳转
         @State private var shortcutTargetApp: App?
         @State private var isShortcutActive: Bool = false
-    // [新增] 轮询定时器
+        // [新增] 轮询定时器
         let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
@@ -43,11 +43,7 @@ struct AppListView: View {
     var isWarningHidden: Bool = false
 
     var shouldShowAdvertisement: Bool {
-        !isAdvertisementHidden &&
-            !appList.filter.isSearching &&
-            !appList.filter.showPatchedOnly &&
-            !appList.isRebuildNeeded &&
-            !appList.isSelectorMode
+        return false
     }
 
     var appString: String {
@@ -104,7 +100,6 @@ struct AppListView: View {
         } else {
             content
         }
-            
             if appList.isProcessingAllPlugins {
                 Color.black.opacity(0.4).ignoresSafeArea()
                 VStack(spacing: 15) {
@@ -121,9 +116,10 @@ struct AppListView: View {
                 .shadow(radius: 10)
                 .transition(.opacity)
             }
-                }
-               .animation(.easeOut, value: appList.isProcessingAllPlugins)
-            }
+         }
+        .animation(.easeOut, value: appList.isProcessingAllPlugins)
+     }
+
 
     var content: some View {
         styledNavigationView
@@ -147,18 +143,15 @@ struct AppListView: View {
                     selectorOpenedURL = urlIdent
                 }
             }
-        
-        // [修改] 使用定时器轮询：每 0.5 秒检查一次，直到跳转成功
-                    .onReceive(timer) { _ in
-                        attemptShortcutJump()
-                    }
-                    .onAppear {
-                        // 只保留广告逻辑
-                        if Double.random(in: 0 ..< 1) < 0.1 {
-                            isAdvertisementHidden = false
-                        }
-                    }
-    
+        // [新增] 轮询信箱
+                .onReceive(timer) { _ in
+                    attemptShortcutJump()
+                }
+            .onAppear {
+                if Double.random(in: 0 ..< 1) < 0.1 {
+                    isAdvertisementHidden = false
+                }
+            }
             .alert(isPresented: $isEnableAllPluginsAlertPresented) {
                 Alert(
                     title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
@@ -170,7 +163,7 @@ struct AppListView: View {
                             appList.reload()
                         }
                     },
-                    secondaryButton: .cancel()
+                    secondaryButton: .cancel(Text(NSLocalizedString("Cancel", comment: "")))
                 )
             }
                 /*
@@ -184,18 +177,17 @@ struct AppListView: View {
                  */
     }
     
-    
-    // [新增] 核心跳转函数
+    // [新增] 核心跳转函数 (死缠烂打模式)
         private func attemptShortcutJump() {
-            // 1. 检查信箱是否有信
+            // 1. 没信件就返回
             guard let bid = ShortcutService.shared.pendingID else { return }
             
-            // 2. 如果已经跳过去了，就暂停处理
+            // 2. 已经在跳转中就返回
             guard !isShortcutActive else { return }
 
-            print("TrollFools: Polling for \(bid)...")
+            print("[TrollFools] Polling for: \(bid)")
 
-            // 3. 在已加载列表中查找
+            // 3. 尝试从列表找
             var foundApp: App? = nil
             for (_, apps) in appList.activeScopeApps {
                 if let target = apps.first(where: { $0.bid == bid }) {
@@ -204,7 +196,7 @@ struct AppListView: View {
                 }
             }
             
-            // 4. 兜底：如果列表没加载完，直接从系统构造一个对象 (确保100%能找到)
+            // 4. 【兜底】列表没加载完？直接用系统 API 构造一个！
             if foundApp == nil {
                 if let proxy = LSApplicationProxy(forIdentifier: bid) {
                     foundApp = App(
@@ -215,15 +207,15 @@ struct AppListView: View {
                         url: proxy.bundleURL()
                     )
                     foundApp?.appList = appList // 注入依赖
-                    print("TrollFools: Created fallback object for \(bid)")
+                    print("[TrollFools] Created fallback app object")
                 }
             }
             
-            // 5. 只有真正找到了对象，才跳转并销毁信件
+            // 5. 只有真正找到了对象，才执行跳转并销毁信件
             if let app = foundApp {
-                print("TrollFools: Target found! Jumping to manage page.")
+                print("[TrollFools] Target found! Jumping...")
                 
-                // 销毁信件，停止后续轮询对该任务的处理
+                // 任务完成，销毁信件
                 ShortcutService.shared.pendingID = nil
                 
                 // 执行跳转
@@ -232,6 +224,7 @@ struct AppListView: View {
                     self.isShortcutActive = true
                 }
             }
+            // 如果没找到，这里什么都不做。pendingID 还在，0.5秒后 timer 会再次调用这个函数重试。
         }
 
     var styledNavigationView: some View {
@@ -251,14 +244,14 @@ struct AppListView: View {
             ScrollViewReader { reader in
                 ZStack {
                     
-                    // [新增] 隐形跳转链接
-                            NavigationLink(isActive: $isShortcutActive) {
-                                if let app = shortcutTargetApp {
-                                    OptionView(app)
+                    // [新增] 隐形跳转通道
+                                NavigationLink(isActive: $isShortcutActive) {
+                                    if let app = shortcutTargetApp {
+                                        OptionView(app) // 跳转到管理页
+                                    }
+                                } label: {
+                                    EmptyView()
                                 }
-                            } label: {
-                                EmptyView()
-                            }
                     
                     refreshableListView
 
@@ -317,7 +310,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -387,7 +380,6 @@ struct AppListView: View {
                     }
                 }
             }
-
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button {
                     isEnableAllPluginsAlertPresented = true
@@ -398,14 +390,14 @@ struct AppListView: View {
                 .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
 
                 Button {
-                    appList.filter.showPatchedOnly.toggle()
+                    appList.showPatchedOnly.toggle()
                 } label: {
                     if #available (iOS 15, *) {
-                        Image(systemName: appList.filter.showPatchedOnly
+                        Image(systemName: appList.showPatchedOnly
                         ? "line.3.horizontal.decrease.circle.fill"
                         : "line.3.horizontal.decrease.circle")
                     }  else  {
-                        Image(systemName: appList.filter.showPatchedOnly
+                        Image(systemName: appList.showPatchedOnly
                         ? "eject.circle.fill"
                         : "eject.circle")
                     }
@@ -414,22 +406,22 @@ struct AppListView: View {
             }
         }
     }
-    
+
     var allAppGroup: some View {
         Group {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
 
             
-            if #available(iOS 15, *) {
-                if shouldShowAdvertisement {
-                    advertisementSection
-                }
-            }
+            //if #available(iOS 15, *) {
+              //  if shouldShowAdvertisement {
+                 //   advertisementSection
+             //   }
+          //  }
              
 
             appSections
@@ -438,7 +430,7 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
                     Button {
@@ -461,7 +453,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -668,7 +660,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {
