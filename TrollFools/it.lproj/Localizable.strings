@@ -347,3 +347,10 @@
 
 /* A description for the blacklist feature */
 "If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "Se la blacklist è abilitata, questa app verrà saltata durante l'abilitazione di tutti i plugin disabilitati.";
+
+/* Desktop Shortcuts */
+"Add to Shortcuts" = "Aggiungi al menu rapido";
+"Remove from Shortcuts" = "Rimuovi dal menu rapido";
+
+/* Static Shortcut */
+"Enable All Plug-Ins" = "Abilita tutti i plugin";

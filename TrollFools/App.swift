@@ -117,7 +117,7 @@ extension App {
             pinnedIDs.removeAll { $0 == bid }
         } else {
             // 限制最多显示 3 个
-            if pinnedIDs.count >= 3 { return }
+            if pinnedIDs.count >= 10 { return }
             pinnedIDs.append(bid)
         }
         

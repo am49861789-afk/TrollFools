@@ -346,3 +346,10 @@
 
 /* A description for the blacklist feature */
 "If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "如果开启黑名单，在使用“一键启用所有插件”功能时，此应用将被跳过。";
+
+/* Desktop Shortcuts */
+"Add to Shortcuts" = "添加到桌面菜单";
+"Remove from Shortcuts" = "从桌面菜单移除";
+
+/* Static Shortcut */
+"Enable All Plug-Ins" = "启用所有插件";

@@ -347,3 +347,10 @@
 
 /* A description for the blacklist feature */
 "If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "If blacklist is enabled, this app will be skipped when enabling all disabled plugins.";
+
+/* Desktop Shortcuts */
+"Add to Shortcuts" = "Add to Home Menu";
+"Remove from Shortcuts" = "Remove from Home Menu";
+
+/* Static Shortcut */
+"Enable All Plug-Ins" = "Enable All Plug-Ins";

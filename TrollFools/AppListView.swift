@@ -101,21 +101,40 @@ struct AppListView: View {
             content
         }
             if appList.isProcessingAllPlugins {
-                Color.black.opacity(0.4).ignoresSafeArea()
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-                    Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-                .padding(25)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(15)
-                .shadow(radius: 10)
-                .transition(.opacity)
-            }
+                            ZStack {
+                                // 背景遮罩：使用 primary 颜色 0.2 透明度，比之前的纯黑 0.4 更轻量
+                                Color.primary.opacity(0.2)
+                                    .ignoresSafeArea()
+                                
+                                if #available(iOS 15.0, *) {
+                                    // iOS 15+ 使用毛玻璃材质 (Ultra Thin Material)
+                                    VStack(spacing: 15) {
+                                        ProgressView()
+                                            .scaleEffect(1.5)
+                                        Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                                            .font(.headline)
+                                    }
+                                    .padding(25)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
+                                    .shadow(radius: 10)
+                                } else {
+                                    // iOS 14 保持原有样式作为回退
+                                    VStack(spacing: 15) {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(1.5)
+                                        Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                    }
+                                    .padding(25)
+                                    .background(Color.black.opacity(0.75))
+                                    .cornerRadius(15)
+                                    .shadow(radius: 10)
+                                }
+                            }
+                            .transition(.opacity)
+                        }
          }
         .animation(.easeOut, value: appList.isProcessingAllPlugins)
      }
@@ -247,7 +266,7 @@ struct AppListView: View {
                     // [新增] 隐形跳转通道
                                 NavigationLink(isActive: $isShortcutActive) {
                                     if let app = shortcutTargetApp {
-                                        OptionView(app) // 跳转到管理页
+                                        EjectListView(app)// 跳转到管理页
                                     }
                                 } label: {
                                     EmptyView()

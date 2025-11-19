@@ -347,3 +347,10 @@
 
 /* A description for the blacklist feature */
 "If blacklist is enabled, this app will be skipped when enabling all disabled plugins." = "Nếu danh sách đen được bật, ứng dụng này sẽ bị bỏ qua khi bật tất cả các plugin đã bị tắt.";
+
+/* Desktop Shortcuts */
+"Add to Shortcuts" = "Thêm vào Menu nhanh";
+"Remove from Shortcuts" = "Xóa khỏi Menu nhanh";
+
+/* Static Shortcut */
+"Enable All Plug-Ins" = "Bật tất cả Plug-In";

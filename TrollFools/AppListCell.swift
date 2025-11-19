@@ -126,15 +126,17 @@ struct AppListCell: View {
         }
 
         // --- 插入开始 ---
-                    Button {
-                        app.toggleHomeShortcut()
-                    } label: {
-                        if app.isPinnedToHome {
-                            Label(NSLocalizedString("Remove from Shortcuts", comment: "移除快捷方式"), systemImage: "minus.circle")
-                        } else {
-                            Label(NSLocalizedString("Add to Shortcuts", comment: "添加到快捷方式"), systemImage: "plus.circle")
-                        }
-                    }
+        Button {
+            app.toggleHomeShortcut()
+        } label: {
+            if app.isPinnedToHome {
+                // Key: "Remove from Shortcuts"
+                Label(NSLocalizedString("Remove from Shortcuts", comment: ""), systemImage: "minus.circle")
+            } else {
+                // Key: "Add to Shortcuts"
+                Label(NSLocalizedString("Add to Shortcuts", comment: ""), systemImage: "plus.circle")
+            }
+        }
                     // --- 插入结束 ---
         
         if AppListModel.hasTrollStore && app.isAllowedToAttachOrDetach {
