@@ -185,15 +185,17 @@ struct AppListView: View {
     }
     
     
-    // [修改] 核心跳转函数 (轮询模式)
+    // [新增] 核心跳转函数
         private func attemptShortcutJump() {
-            // 1. 检查是否有任务 (注意：先不要清空 pendingID，找到应用后再清空)
+            // 1. 检查信箱是否有信
             guard let bid = ShortcutService.shared.pendingID else { return }
             
-            // 2. 如果当前正在跳转中，暂停处理
+            // 2. 如果已经跳过去了，就暂停处理
             guard !isShortcutActive else { return }
 
-            // 3. 尝试在已加载的列表中查找
+            print("TrollFools: Polling for \(bid)...")
+
+            // 3. 在已加载列表中查找
             var foundApp: App? = nil
             for (_, apps) in appList.activeScopeApps {
                 if let target = apps.first(where: { $0.bid == bid }) {
@@ -202,7 +204,7 @@ struct AppListView: View {
                 }
             }
             
-            // 4. 兜底：如果列表还没加载出来，尝试用 LSApplicationProxy 直接构造
+            // 4. 兜底：如果列表没加载完，直接从系统构造一个对象 (确保100%能找到)
             if foundApp == nil {
                 if let proxy = LSApplicationProxy(forIdentifier: bid) {
                     foundApp = App(
@@ -212,16 +214,16 @@ struct AppListView: View {
                         teamID: proxy.teamID() ?? "",
                         url: proxy.bundleURL()
                     )
-                    foundApp?.appList = appList
+                    foundApp?.appList = appList // 注入依赖
+                    print("TrollFools: Created fallback object for \(bid)")
                 }
             }
             
-            // 5. 只有找到了 App 对象，才执行跳转并“撕掉条子”(清空 ID)
-            // 如果没找到 (foundApp == nil)，则什么都不做，等待 0.5 秒后的下一次检查
+            // 5. 只有真正找到了对象，才跳转并销毁信件
             if let app = foundApp {
-                print("TrollFools: Target found for \(bid), jumping...")
+                print("TrollFools: Target found! Jumping to manage page.")
                 
-                // 标记任务完成
+                // 销毁信件，停止后续轮询对该任务的处理
                 ShortcutService.shared.pendingID = nil
                 
                 // 执行跳转

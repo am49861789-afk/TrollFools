@@ -8,13 +8,13 @@
 import SwiftUI
 import UIKit
 
-// 1. 全局单例，存储待处理的 ID
+// 1. 信箱服务：只负责存取 ID
 class ShortcutService: ObservableObject {
     static let shared = ShortcutService()
     @Published var pendingID: String? = nil
 }
 
-// 2. AppDelegate
+// 2. AppDelegate：收到系统指令 -> 存入信箱
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         handleShortcut(shortcutItem)
@@ -30,10 +30,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func handleShortcut(_ item: UIApplicationShortcutItem) {
+        // 核心逻辑：只存 ID，不做任何跳转尝试
         if item.type == "wiki.qaq.TrollFools.openManagedApp",
            let bid = item.userInfo?["targetBid"] as? String {
-            // 立即存入，打印日志
-            print("[TrollFools] AppDelegate received shortcut for: \(bid)")
+            print("[TrollFools] Received Shortcut ID: \(bid)")
             ShortcutService.shared.pendingID = bid
         }
     }
