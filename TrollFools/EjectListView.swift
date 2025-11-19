@@ -661,7 +661,6 @@ struct EjectListView: View {
 
        // let view = viewControllerHost.viewController?.navigationController?.view
         //view?.isUserInteractionEnabled = false
-        let originalFileName = plugInToReplace.url.lastPathComponent
 
         DispatchQueue.global(qos: .userInitiated).async {
             defer {
