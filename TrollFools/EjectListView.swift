@@ -40,42 +40,22 @@ struct EjectListView: View {
         _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)")
         _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
-    
-    @ViewBuilder
-    private var loadingView: some View {
-        ZStack {
-            Color.primary.opacity(0.2)
-                .ignoresSafeArea()
-
-            if #available(iOS 15.0, *) {
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-
-                    Text(NSLocalizedString("Replacing...", comment: ""))
-                        .font(.headline)
-                }
-                .padding(25)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
-                .shadow(radius: 10)
-            } else {
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-
-                    Text(NSLocalizedString("Replacing...", comment: ""))
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-                .padding(25)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(15)
-                .shadow(radius: 10)
+    // [修改] 完全使用系统原生 UI，无任何自定义背景框或位置强制
+        @ViewBuilder
+        private var loadingView: some View {
+            ZStack {
+                // 1. 全屏半透明遮罩 (阻断点击)
+                Color.black.opacity(0.25)
+                    .ignoresSafeArea()
+                
+                // 2. 系统原生 ProgressView (自动处理布局和样式)
+                ProgressView(NSLocalizedString("Replacing...", comment: ""))
+                    .controlSize(.large) // 使用大号样式
+                    .tint(.white)        // 确保在半透明黑背景上能看清
             }
+            .transition(.opacity)
+            .zIndex(100)
         }
-        .transition(.opacity)
-    }
 
     var body: some View {
         ZStack {

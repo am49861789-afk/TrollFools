@@ -100,40 +100,20 @@ struct AppListView: View {
         } else {
             content
         }
-            if appList.isProcessingAllPlugins {
+            // [修改] 使用系统原生 UI 风格的加载遮罩
+                        if appList.isProcessingAllPlugins {
                             ZStack {
-                                // 背景遮罩：使用 primary 颜色 0.2 透明度，比之前的纯黑 0.4 更轻量
-                                Color.primary.opacity(0.2)
+                                // 1. 全屏半透明遮罩，阻挡点击
+                                Color.black.opacity(0.25)
                                     .ignoresSafeArea()
                                 
-                                if #available(iOS 15.0, *) {
-                                    // iOS 15+ 使用毛玻璃材质 (Ultra Thin Material)
-                                    VStack(spacing: 15) {
-                                        ProgressView()
-                                            .scaleEffect(1.5)
-                                        Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                                            .font(.headline)
-                                    }
-                                    .padding(25)
-                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
-                                    .shadow(radius: 10)
-                                } else {
-                                    // iOS 14 保持原有样式作为回退
-                                    VStack(spacing: 15) {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                            .scaleEffect(1.5)
-                                        Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                    }
-                                    .padding(25)
-                                    .background(Color.black.opacity(0.75))
-                                    .cornerRadius(15)
-                                    .shadow(radius: 10)
-                                }
+                                // 2. 系统原生进度条 + 文字
+                                ProgressView(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .padding()
                             }
                             .transition(.opacity)
+                            .zIndex(100) // 确保显示在最上层
                         }
          }
         .animation(.easeOut, value: appList.isProcessingAllPlugins)
@@ -196,13 +176,13 @@ struct AppListView: View {
                  */
     }
     
-    // [新增] 核心跳转函数 (死缠烂打模式)
+    // [修改] 核心跳转函数 (支持自动关闭旧页面并打开新页面)
         private func attemptShortcutJump() {
-            // 1. 没信件就返回
+            // 1. 检查是否有任务
             guard let bid = ShortcutService.shared.pendingID else { return }
             
-            // 2. 已经在跳转中就返回
-            guard !isShortcutActive else { return }
+            // 【修改点 1】: 删掉了之前的 guard !isShortcutActive else { return }
+            // 我们不再因为当前有页面就停止，而是要主动处理它
 
             print("[TrollFools] Polling for: \(bid)")
 
@@ -215,7 +195,7 @@ struct AppListView: View {
                 }
             }
             
-            // 4. 【兜底】列表没加载完？直接用系统 API 构造一个！
+            // 4. 兜底构造
             if foundApp == nil {
                 if let proxy = LSApplicationProxy(forIdentifier: bid) {
                     foundApp = App(
@@ -225,25 +205,43 @@ struct AppListView: View {
                         teamID: proxy.teamID() ?? "",
                         url: proxy.bundleURL()
                     )
-                    foundApp?.appList = appList // 注入依赖
-                    print("[TrollFools] Created fallback app object")
+                    foundApp?.appList = appList
                 }
             }
             
-            // 5. 只有真正找到了对象，才执行跳转并销毁信件
+            // 5. 只有找到了目标 App，才处理跳转逻辑
             if let app = foundApp {
-                print("[TrollFools] Target found! Jumping...")
+                print("[TrollFools] Target found: \(app.name)")
                 
                 // 任务完成，销毁信件
                 ShortcutService.shared.pendingID = nil
                 
-                // 执行跳转
-                DispatchQueue.main.async {
-                    self.shortcutTargetApp = app
-                    self.isShortcutActive = true
+                // 【修改点 2】: 智能跳转逻辑
+                if isShortcutActive {
+                    // 情况 A: 当前已经在一个页面里了
+                    // 动作: 先关闭当前页面 -> 等待动画 -> 打开新页面
+                    print("[TrollFools] Existing view active. Closing first...")
+                    
+                    // 1. 先关闭当前页面 (退回列表)
+                    self.isShortcutActive = false
+                    
+                    // 2. 延迟 0.6 秒 (等待 iOS 导航栏返回动画完成)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        print("[TrollFools] Opening new target: \(app.name)")
+                        self.shortcutTargetApp = app
+                        self.isShortcutActive = true
+                    }
+                } else {
+                    // 情况 B: 当前在列表页，没打开任何页面
+                    // 动作: 直接打开
+                    print("[TrollFools] Jumping directly to: \(app.name)")
+                    DispatchQueue.main.async {
+                        self.shortcutTargetApp = app
+                        self.isShortcutActive = true
+                    }
                 }
             }
-            // 如果没找到，这里什么都不做。pendingID 还在，0.5秒后 timer 会再次调用这个函数重试。
+            // 如果没找到 foundApp，什么都不做，pendingID 还在，等待下一次 timer 轮询
         }
 
     var styledNavigationView: some View {
