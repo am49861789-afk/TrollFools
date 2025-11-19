@@ -13,6 +13,9 @@ final class EjectListModel: ObservableObject {
     private(set) var injectedPlugIns: [InjectedPlugIn] = []
 
     @Published var filter = FilterOptions()
+    
+    // [新增] 全局替换状态，让 Cell 也能读取到
+        @Published var isReplacing: Bool = false
     @Published var filteredPlugIns: [InjectedPlugIn] = []
 
     @Published var isOkToEnableAll = false

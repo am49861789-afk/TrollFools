@@ -40,40 +40,7 @@ struct EjectListView: View {
         _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)")
         _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
-    // [修改] 完全使用系统原生 UI，无任何自定义背景框或位置强制
-    // [修改] 仿 TrollStore 风格的居中 HUD 加载样式
-        @ViewBuilder
-        private var loadingView: some View {
-            ZStack {
-                // 1. 背景遮罩
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                
-                // 2. 居中卡片 HUD
-                VStack(spacing: 20) {
-                    if #available(iOS 15.0, *) {
-                        ProgressView()
-                            .controlSize(.large)
-                    } else {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: Color(UIColor.label)))
-                            .scaleEffect(1.5)
-                    }
-                    
-                    Text(NSLocalizedString("Replacing...", comment: ""))
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(24)
-                .frame(minWidth: 160)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .cornerRadius(16)
-                .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 4)
-            }
-            .transition(.opacity)
-            .zIndex(100)
-        }
-
+    
     var body: some View {
         ZStack {
             if #available(iOS 15, *) {
@@ -95,12 +62,7 @@ struct EjectListView: View {
             } else {
                 content
             }
-            
-            if isReplacing {
-                loadingView
-            }
         }
-        .animation(.easeOut(duration: 0.2), value: isReplacing)
         .quickLookPreview($quickLookExport)
     }
 
@@ -695,10 +657,11 @@ struct EjectListView: View {
         let wasEnabled = plugInToReplace.isEnabled
         var logFileURL: URL?
         
-        self.isReplacing = true
+        self.ejectList.isReplacing = true
 
        // let view = viewControllerHost.viewController?.navigationController?.view
         //view?.isUserInteractionEnabled = false
+        let originalFileName = plugInToReplace.url.lastPathComponent
 
         DispatchQueue.global(qos: .userInitiated).async {
             defer {
@@ -707,7 +670,7 @@ struct EjectListView: View {
                     ejectList.app.reload()
                     ejectList.reload()
                     //view?.isUserInteractionEnabled = true
-                    self.isReplacing = false
+                    self.ejectList.isReplacing = false
                 }
             }
 
