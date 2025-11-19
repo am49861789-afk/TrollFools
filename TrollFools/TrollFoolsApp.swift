@@ -8,13 +8,13 @@
 import SwiftUI
 import UIKit
 
-// 1. 创建一个全局服务，用来传递要跳转的 Bundle ID
+// 1. 导航服务
 class ShortcutNavigationService: ObservableObject {
     static let shared = ShortcutNavigationService()
     @Published var targetBundleID: String? = nil
 }
 
-// 2. 添加 AppDelegate 来处理快捷菜单点击
+// 2. AppDelegate 拦截快捷菜单
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         handleShortcut(shortcutItem)
@@ -30,11 +30,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func handleShortcut(_ item: UIApplicationShortcutItem) {
-        // 检查是否是我们定义的类型，并提取 Bundle ID
         if item.type == "wiki.qaq.TrollFools.openManagedApp",
            let bid = item.userInfo?["targetBid"] as? String {
-            // 延迟一点点，确保 UI 加载完毕
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // 延迟 0.8 秒，给数据加载留出时间，虽然我们有了兜底机制，多一点缓冲更稳
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 ShortcutNavigationService.shared.targetBundleID = bid
             }
         }
@@ -45,7 +44,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct TrollFoolsApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
-    // 提升 AppListModel 为 StateObject，保证生命周期
+    // 关键修改：使用 @StateObject 保证 Model 不会因为视图刷新而丢失数据
     @StateObject var model = AppListModel()
     
     @AppStorage("isDisclaimerHiddenV2")

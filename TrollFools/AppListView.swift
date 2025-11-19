@@ -18,10 +18,10 @@ struct AppListView: View {
     @StateObject var searchViewModel = AppListSearchModel()
     @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
-    
-    // [新增] 用于控制自动跳转
+    // === 新增变量 ===
         @State private var shortcutTargetApp: App?
         @State private var isShortcutActive: Bool = false
+        // === 结束新增 ===
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
     @State var selectedIndex: String? = nil
@@ -146,33 +146,41 @@ struct AppListView: View {
                 }
             }
         
-        // [新增] 监听桌面快捷菜单的跳转指令
-                .onReceive(ShortcutNavigationService.shared.$targetBundleID) { bid in
-                    guard let bid = bid else { return }
-                    
-                    // 1. 重置信号
-                    ShortcutNavigationService.shared.targetBundleID = nil
-                    
-                    // 2. 查找对应的 App 对象
-                    var foundApp: App? = nil
-                    
-                    // 遍历所有分组查找该 App (因为数据是按首字母分组的)
-                    for (_, apps) in appList.activeScopeApps {
-                        if let target = apps.first(where: { $0.bid == bid }) {
-                            foundApp = target
-                            break
-                        }
-                    }
-                    
-                    // 3. 如果没找到（可能在其他未加载的分组里），尝试从所有应用缓存中找
-                    // 注意：这需要访问私有变量，如果没有权限，我们暂时只能在已加载列表中找
-                    
-                    // 4. 执行跳转
-                    if let app = foundApp {
-                        self.shortcutTargetApp = app
-                        self.isShortcutActive = true
+        // === 插入开始：核心监听 ===
+            .onReceive(ShortcutNavigationService.shared.$targetBundleID) { bid in
+                guard let bid = bid else { return }
+                ShortcutNavigationService.shared.targetBundleID = nil // 重置信号
+
+                // 1. 尝试从现有列表中查找
+                var foundApp: App? = nil
+                for (_, apps) in appList.activeScopeApps {
+                    if let target = apps.first(where: { $0.bid == bid }) {
+                        foundApp = target
+                        break
                     }
                 }
+
+                // 2. 【关键修复】如果列表中还没加载出来，直接从系统读取并创建对象
+                if foundApp == nil {
+                    if let proxy = LSApplicationProxy(forIdentifier: bid) {
+                        foundApp = App(
+                            bid: bid,
+                            name: proxy.localizedName() ?? bid,
+                            type: proxy.applicationType() ?? "User",
+                            teamID: proxy.teamID() ?? "",
+                            url: proxy.bundleURL()
+                        )
+                        foundApp?.appList = appList // 注入依赖
+                    }
+                }
+
+                // 3. 执行跳转
+                if let app = foundApp {
+                    self.shortcutTargetApp = app
+                    self.isShortcutActive = true
+                }
+            }
+            // === 插入结束 ===
         
             .onAppear {
                 if Double.random(in: 0 ..< 1) < 0.1 {
@@ -220,14 +228,15 @@ struct AppListView: View {
         NavigationView {
             ScrollViewReader { reader in
                 ZStack {
-                    // [新增] 隐形导航链，用于程序化跳转到管理页面
-                                        NavigationLink(isActive: $isShortcutActive) {
-                                            if let app = shortcutTargetApp {
-                                                OptionView(app)
-                                            }
-                                        } label: {
-                                            EmptyView()
+                    // === 插入开始：隐形跳转链接 ===
+                                    NavigationLink(isActive: $isShortcutActive) {
+                                        if let app = shortcutTargetApp {
+                                            OptionView(app)
                                         }
+                                    } label: {
+                                        EmptyView()
+                                    }
+                                    // === 插入结束 ===
                     refreshableListView
 
                     if verticalSizeClass == .regular && appList.activeScopeApps.keys.count > 1 {
