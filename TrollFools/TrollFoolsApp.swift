@@ -8,21 +8,19 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 1. 新增：全局状态管理器 (就像一个信箱)
-class QuickActionService: ObservableObject {
-    static let shared = QuickActionService()
-    @Published var shouldEnableAllPlugIns: Bool = false
+// 1. 创建一个全局服务，用来传递要跳转的 Bundle ID
+class ShortcutNavigationService: ObservableObject {
+    static let shared = ShortcutNavigationService()
+    @Published var targetBundleID: String? = nil
 }
 
-// MARK: - 2. 修改：AppDelegate 负责接收系统指令并存入信箱
+// 2. 添加 AppDelegate 来处理快捷菜单点击
 class AppDelegate: NSObject, UIApplicationDelegate {
-    // 处理后台唤醒
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         handleShortcut(shortcutItem)
         completionHandler(true)
     }
 
-    // 处理冷启动
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
             handleShortcut(shortcutItem)
@@ -32,11 +30,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func handleShortcut(_ item: UIApplicationShortcutItem) {
-        if item.type == "wiki.qaq.TrollFools.enableAll" {
-            // 核心修改：不再发通知，而是直接修改状态变量
-            // 无论 UI 什么时候准备好，这个变量都为 true，跑不掉
-            DispatchQueue.main.async {
-                QuickActionService.shared.shouldEnableAllPlugIns = true
+        // 检查是否是我们定义的类型，并提取 Bundle ID
+        if item.type == "wiki.qaq.TrollFools.openManagedApp",
+           let bid = item.userInfo?["targetBid"] as? String {
+            // 延迟一点点，确保 UI 加载完毕
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                ShortcutNavigationService.shared.targetBundleID = bid
             }
         }
     }
@@ -45,6 +44,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct TrollFoolsApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
+    // 提升 AppListModel 为 StateObject，保证生命周期
+    @StateObject var model = AppListModel()
     
     @AppStorage("isDisclaimerHiddenV2")
     var isDisclaimerHidden: Bool = false
@@ -58,7 +60,7 @@ struct TrollFoolsApp: SwiftUI.App {
             ZStack {
                 if isDisclaimerHidden {
                     AppListView()
-                        .environmentObject(AppListModel())
+                        .environmentObject(model)
                         .transition(.opacity)
                 } else {
                     DisclaimerView(isDisclaimerHidden: $isDisclaimerHidden)

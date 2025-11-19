@@ -100,3 +100,53 @@ final class App: Identifiable, Equatable, Hashable, ObservableObject {
         hasher.combine(bid)
     }
 }
+// --- 请添加到 App.swift 最底部 ---
+
+extension App {
+    // 检查当前 App 是否已经在桌面菜单中
+    var isPinnedToHome: Bool {
+        let pinnedIDs = UserDefaults.standard.stringArray(forKey: "pinned_shortcut_ids") ?? []
+        return pinnedIDs.contains(bid)
+    }
+
+    // 切换状态：添加或移除
+    func toggleHomeShortcut() {
+        var pinnedIDs = UserDefaults.standard.stringArray(forKey: "pinned_shortcut_ids") ?? []
+        
+        if isPinnedToHome {
+            pinnedIDs.removeAll { $0 == bid }
+        } else {
+            // 限制最多添加 3 个，防止挤占系统菜单
+            if pinnedIDs.count >= 3 { return }
+            pinnedIDs.append(bid)
+        }
+        
+        UserDefaults.standard.set(pinnedIDs, forKey: "pinned_shortcut_ids")
+        updateApplicationShortcuts(with: pinnedIDs)
+        
+        // 通知界面刷新状态
+        objectWillChange.send()
+    }
+
+    // 更新 iOS 系统的桌面快捷菜单
+    private func updateApplicationShortcuts(with ids: [String]) {
+        var shortcuts: [UIApplicationShortcutItem] = []
+        
+        for id in ids {
+            // 尝试获取应用名称，如果获取失败则显示 Bundle ID
+            let appName = LSApplicationProxy(forIdentifier: id)?.localizedName() ?? id
+            
+            let icon = UIApplicationShortcutIcon(systemImageName: "gear") // 使用齿轮图标
+            let item = UIApplicationShortcutItem(
+                type: "wiki.qaq.TrollFools.openManagedApp", // 唯一的标识符
+                localizedTitle: appName,
+                localizedSubtitle: nil,
+                icon: icon,
+                userInfo: ["targetBid": id as NSSecureCoding] // 关键：把 BundleID 存进去
+            )
+            shortcuts.append(item)
+        }
+        
+        UIApplication.shared.shortcutItems = shortcuts
+    }
+}

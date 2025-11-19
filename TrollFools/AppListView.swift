@@ -18,6 +18,10 @@ struct AppListView: View {
     @StateObject var searchViewModel = AppListSearchModel()
     @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
+    
+    // [新增] 用于控制自动跳转
+        @State private var shortcutTargetApp: App?
+        @State private var isShortcutActive: Bool = false
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
     @State var selectedIndex: String? = nil
@@ -142,26 +146,33 @@ struct AppListView: View {
                 }
             }
         
-        // =========== 开始插入/修改代码 ============
-                // 监听全局状态变量的变化
-                .onReceive(QuickActionService.shared.$shouldEnableAllPlugIns) { shouldEnable in
-                    // 1. 检查信号是否为 true
-                    guard shouldEnable else { return }
+        // [新增] 监听桌面快捷菜单的跳转指令
+                .onReceive(ShortcutNavigationService.shared.$targetBundleID) { bid in
+                    guard let bid = bid else { return }
                     
-                    // 2. 检查当前是否正在处理中，防止重复
-                    guard !appList.isProcessingAllPlugins else { return }
+                    // 1. 重置信号
+                    ShortcutNavigationService.shared.targetBundleID = nil
                     
-                    // 3. 立即重置信号（防止下次进入重复触发）
-                    QuickActionService.shared.shouldEnableAllPlugIns = false
+                    // 2. 查找对应的 App 对象
+                    var foundApp: App? = nil
                     
-                    // 4. 执行业务逻辑
-                    appList.isProcessingAllPlugins = true
-                    appList.enableAllDisabledPlugins {
-                        appList.isProcessingAllPlugins = false
-                        appList.reload()
+                    // 遍历所有分组查找该 App (因为数据是按首字母分组的)
+                    for (_, apps) in appList.activeScopeApps {
+                        if let target = apps.first(where: { $0.bid == bid }) {
+                            foundApp = target
+                            break
+                        }
+                    }
+                    
+                    // 3. 如果没找到（可能在其他未加载的分组里），尝试从所有应用缓存中找
+                    // 注意：这需要访问私有变量，如果没有权限，我们暂时只能在已加载列表中找
+                    
+                    // 4. 执行跳转
+                    if let app = foundApp {
+                        self.shortcutTargetApp = app
+                        self.isShortcutActive = true
                     }
                 }
-                // =========== 结束插入/修改代码 ============
         
             .onAppear {
                 if Double.random(in: 0 ..< 1) < 0.1 {
@@ -209,6 +220,14 @@ struct AppListView: View {
         NavigationView {
             ScrollViewReader { reader in
                 ZStack {
+                    // [新增] 隐形导航链，用于程序化跳转到管理页面
+                                        NavigationLink(isActive: $isShortcutActive) {
+                                            if let app = shortcutTargetApp {
+                                                OptionView(app)
+                                            }
+                                        } label: {
+                                            EmptyView()
+                                        }
                     refreshableListView
 
                     if verticalSizeClass == .regular && appList.activeScopeApps.keys.count > 1 {
