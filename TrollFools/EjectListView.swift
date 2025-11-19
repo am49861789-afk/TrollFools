@@ -50,36 +50,38 @@ struct EjectListView: View {
         }
     
     var body: some View {
-        ZStack {
-            if #available(iOS 15, *) {
-                content
-                    .alert(NSLocalizedString("Eject All", comment: ""), isPresented: $isWarningPresented) {
-                        Button(role: .destructive) {
-                            deleteAll(shouldDesist: true)
-                        } label: {
-                            Text(NSLocalizedString("Confirm", comment: ""))
-                        }
-                        Button(role: .cancel) {
-                            isWarningPresented = false
-                        } label: {
-                            Text(NSLocalizedString("Cancel", comment: ""))
-                        }
-                    } message: {
-                        Text(NSLocalizedString("Are you sure you want to eject all plug-ins? This action cannot be undone.", comment: ""))
+            ZStack {
+                // [修改] 使用 Group 包裹内容，以便统一添加 .disabled
+                Group {
+                    if #available(iOS 15, *) {
+                        content
+                            .alert(NSLocalizedString("Eject All", comment: ""), isPresented: $isWarningPresented) {
+                                Button(role: .destructive) {
+                                    deleteAll(shouldDesist: true)
+                                } label: {
+                                    Text(NSLocalizedString("Confirm", comment: ""))
+                                }
+                                Button(role: .cancel) {
+                                    isWarningPresented = false
+                                } label: {
+                                    Text(NSLocalizedString("Cancel", comment: ""))
+                                }
+                            } message: {
+                                Text(NSLocalizedString("Are you sure you want to eject all plug-ins? This action cannot be undone.", comment: ""))
+                            }
+                    } else {
+                        content
                     }
-            } else {
-                content
+                }
+                .disabled(ejectList.isReplacing) // <--- 【核心修改】替换时禁用底层所有交互(包括滑动)
+
+                // [保留] 隐形阻断层 (双重保险)
+                if ejectList.isReplacing {
+                    loadingView
+                }
             }
-            
-            
-            // [新增] 这一段必须加，否则 loadingView 不会生效
-                        if ejectList.isReplacing {
-                                         loadingView
-                        }
-            
+            .quickLookPreview($quickLookExport)
         }
-        .quickLookPreview($quickLookExport)
-    }
 
     var content: some View {
         Group {
