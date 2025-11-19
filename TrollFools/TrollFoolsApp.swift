@@ -6,45 +6,44 @@
 //
 
 import SwiftUI
-import UIKit // 新增引用
+import UIKit
 
-// 1. 定义通知名称
-extension Notification.Name {
-    static let tfEnableAllPlugins = Notification.Name("TFEnableAllPlugins")
+// MARK: - 1. 新增：全局状态管理器 (就像一个信箱)
+class QuickActionService: ObservableObject {
+    static let shared = QuickActionService()
+    @Published var shouldEnableAllPlugIns: Bool = false
 }
 
-// 2. 创建 AppDelegate 处理快捷方式
+// MARK: - 2. 修改：AppDelegate 负责接收系统指令并存入信箱
 class AppDelegate: NSObject, UIApplicationDelegate {
-    // 处理后台唤醒时的快捷操作
+    // 处理后台唤醒
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
-        if shortcutItem.type == "wiki.qaq.TrollFools.enableAll" {
-            // 延迟发送通知，确保 UI 已经加载
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                NotificationCenter.default.post(name: .tfEnableAllPlugins, object: nil)
-            }
-            completionHandler(true)
-        } else {
-            completionHandler(false)
-        }
+        handleShortcut(shortcutItem)
+        completionHandler(true)
     }
 
-    // 处理冷启动时的快捷操作
+    // 处理冷启动
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem,
-           shortcutItem.type == "wiki.qaq.TrollFools.enableAll" {
-            // 同样延迟发送通知
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                NotificationCenter.default.post(name: .tfEnableAllPlugins, object: nil)
-            }
-            return false // 返回 false 告诉系统我们已经处理了 shortcutItem
+        if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
+            handleShortcut(shortcutItem)
+            return false
         }
         return true
+    }
+
+    private func handleShortcut(_ item: UIApplicationShortcutItem) {
+        if item.type == "wiki.qaq.TrollFools.enableAll" {
+            // 核心修改：不再发通知，而是直接修改状态变量
+            // 无论 UI 什么时候准备好，这个变量都为 true，跑不掉
+            DispatchQueue.main.async {
+                QuickActionService.shared.shouldEnableAllPlugIns = true
+            }
+        }
     }
 }
 
 @main
 struct TrollFoolsApp: SwiftUI.App {
-    // 3. 接入 AppDelegate
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     @AppStorage("isDisclaimerHiddenV2")

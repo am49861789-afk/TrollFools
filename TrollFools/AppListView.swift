@@ -142,22 +142,26 @@ struct AppListView: View {
                 }
             }
         
-        // =========== 开始插入代码 ============
-                .onReceive(NotificationCenter.default.publisher(for: .tfEnableAllPlugins)) { _ in
-                    // 如果当前已经在处理中，则忽略
+        // =========== 开始插入/修改代码 ============
+                // 监听全局状态变量的变化
+                .onReceive(QuickActionService.shared.$shouldEnableAllPlugIns) { shouldEnable in
+                    // 1. 检查信号是否为 true
+                    guard shouldEnable else { return }
+                    
+                    // 2. 检查当前是否正在处理中，防止重复
                     guard !appList.isProcessingAllPlugins else { return }
                     
-                    // 设置处理状态，这会触发界面显示 Loading 转圈
-                    appList.isProcessingAllPlugins = true
+                    // 3. 立即重置信号（防止下次进入重复触发）
+                    QuickActionService.shared.shouldEnableAllPlugIns = false
                     
-                    // 调用 AppListModel 中的核心方法执行逻辑
+                    // 4. 执行业务逻辑
+                    appList.isProcessingAllPlugins = true
                     appList.enableAllDisabledPlugins {
-                        // 完成后的回调
                         appList.isProcessingAllPlugins = false
                         appList.reload()
                     }
                 }
-                // =========== 结束插入代码 ============
+                // =========== 结束插入/修改代码 ============
         
             .onAppear {
                 if Double.random(in: 0 ..< 1) < 0.1 {
