@@ -100,33 +100,25 @@ struct AppListView: View {
         } else {
             content
         }
-            // [修改] 仿原生 Alert 风格的横向加载条
-                        if appList.isProcessingAllPlugins {
-                            ZStack {
-                                // 1. 背景遮罩
-                                Color.black.opacity(0.25)
-                                    .ignoresSafeArea()
-                                
-                                // 2. 横向布局的 HUD
-                                HStack(spacing: 20) {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: Color.white))
-                                    
-                                    Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                                        .font(.headline)
-                                }
-                                .padding(.vertical, 20)
-                                .padding(.horizontal, 30)
-                                .background(Color(UIColor.secondarySystemGroupedBackground)) // 适配深色/浅色模式的背景色
-                                .cornerRadius(12)
-                                .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 5)
-                            }
-                            .transition(.opacity)
-                            .zIndex(100)
-                        }
-         }
-        .animation(.easeOut, value: appList.isProcessingAllPlugins)
-     }
+            if appList.isProcessingAllPlugins {
+                Color.black.opacity(0.4).ignoresSafeArea()
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                    Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .padding(25)
+                .background(Color.black.opacity(0.75))
+                .cornerRadius(15)
+                .shadow(radius: 10)
+                .transition(.opacity)
+            }
+                }
+               .animation(.easeOut, value: appList.isProcessingAllPlugins)
+            }
 
 
     var content: some View {

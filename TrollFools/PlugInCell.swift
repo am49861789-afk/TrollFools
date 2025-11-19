@@ -62,71 +62,8 @@ struct PlugInCell: View {
     }
 
     var body: some View {
-            // 判断：系统正在替换中 且 目标就是我自己
-            if ejectList.isReplacing && ejectList.plugInToReplace == plugIn {
-                // [新样式] 显示原有内容 + 菊花
-                HStack {
-                    labelContent // 复用原本的图标和文字
-                    Spacer()
-                    ProgressView() // 菊花代替开关
-                        .padding(.trailing, 2) // 微调位置对齐
-                }
-                .padding(.vertical, 4) // 保持高度一致
-                // 注意：这里不加 .contextMenu，替换时禁止操作
-            } else {
-                // [旧样式] 原有的开关
-                Toggle(isOn: $isEnabled) {
-                    labelContent
-                }
-                .onAppear {
-                    isEnabled = plugIn.isEnabled
-                }
-                .onChange(of: isEnabled) { value in
-                    ejectList.togglePlugIn(plugIn, isEnabled: value)
-                }
-                .contextMenu {
-                    Button {
-                        isRenameSheetPresented = true
-                    } label: {
-                        Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
-                    }
-                    Button {
-                        ejectList.plugInToReplace = plugIn
-                    } label: {
-                        Label(NSLocalizedString("Replace", comment: ""), systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    if #available(iOS 16.4, *) {
-                        ShareLink(item: plugIn.url) {
-                            Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
-                        }
-                    } else {
-                        Button {
-                            exportPlugIn()
-                        } label: {
-                            Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
-                        }
-                    }
-                    Button {
-                        openInFilza()
-                    } label: {
-                        if isFilzaInstalled {
-                            Label(NSLocalizedString("Show in Filza", comment: ""), systemImage: "scope")
-                        } else {
-                            Label(NSLocalizedString("Filza (URL Scheme) Not Installed", comment: ""), systemImage: "xmark.octagon")
-                        }
-                    }
-                    .disabled(!isFilzaInstalled)
-                }
-                .sheet(isPresented: $isRenameSheetPresented) {
-                    RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
-                        .environmentObject(renameManager)
-                }
-            }
-        }
-
-        // [新增] 提取出来的标签内容 (图标+文字)，供上面复用
-        var labelContent: some View {
             HStack(spacing: 12) {
+                // 1. 左侧图标
                 if verticalSizeClass == .compact {
                     Image(systemName: iconName)
                         .resizable()
@@ -134,6 +71,8 @@ struct PlugInCell: View {
                         .frame(width: 24, height: 24)
                         .foregroundColor(.accentColor)
                 }
+                
+                // 2. 中间文字信息
                 VStack(alignment: .leading) {
                     if #available(iOS 15, *) {
                         Text(highlightedName)
@@ -148,7 +87,70 @@ struct PlugInCell: View {
                         .font(.subheadline)
                         .lineLimit(1)
                 }
+                
+                Spacer()
+                
+                // 3. 右侧：开关 或 菊花
+                // 判断：如果正在替换 且 目标就是我 -> 显示菊花
+                if ejectList.isReplacing && ejectList.plugInToReplace == plugIn {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .secondary)) // 使用原生小菊花
+                        .scaleEffect(0.8) //稍微调小一点，匹配开关的高度
+                } else {
+                    // 否则 -> 显示开关
+                    Toggle("", isOn: $isEnabled)
+                        .labelsHidden() // 隐藏 Toggle 自带的 label，只保留开关按钮
+                }
             }
+            .padding(.vertical, 4) // 保持高度舒适
+            .onAppear {
+                isEnabled = plugIn.isEnabled
+            }
+            .onChange(of: isEnabled) { value in
+                ejectList.togglePlugIn(plugIn, isEnabled: value)
+            }
+            // 仅在非替换状态下才允许 Context Menu 操作，防止冲突
+            .contextMenu(ejectList.isReplacing ? nil : menuItems)
+            .sheet(isPresented: $isRenameSheetPresented) {
+                RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
+                    .environmentObject(renameManager)
+            }
+        }
+
+        // 把菜单项提取出来，让代码更清晰
+        @ViewBuilder
+        var menuItems: some View {
+            Button {
+                isRenameSheetPresented = true
+            } label: {
+                Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
+            }
+            Button {
+                ejectList.plugInToReplace = plugIn
+            } label: {
+                Label(NSLocalizedString("Replace", comment: ""), systemImage: "arrow.triangle.2.circlepath")
+            }
+            if #available(iOS 16.4, *) {
+                ShareLink(item: plugIn.url) {
+                    Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                }
+            } else {
+                Button {
+                    exportPlugIn()
+                } label: {
+                    Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                }
+            }
+            Button {
+                openInFilza()
+            } label: {
+                if isFilzaInstalled {
+                    Label(NSLocalizedString("Show in Filza", comment: ""), systemImage: "scope")
+                } else {
+                    Label(NSLocalizedString("Filza (URL Scheme) Not Installed", comment: ""), systemImage: "xmark.octagon")
+                }
+            }
+            .disabled(!isFilzaInstalled)
         }
     
     private func exportPlugIn() {
