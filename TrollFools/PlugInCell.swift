@@ -62,8 +62,8 @@ struct PlugInCell: View {
     }
 
     var body: some View {
+        Toggle(isOn: $isEnabled) {
             HStack(spacing: 12) {
-                // 1. 左侧图标
                 if verticalSizeClass == .compact {
                     Image(systemName: iconName)
                         .resizable()
@@ -71,8 +71,7 @@ struct PlugInCell: View {
                         .frame(width: 24, height: 24)
                         .foregroundColor(.accentColor)
                 }
-                
-                // 2. 中间文字信息
+
                 VStack(alignment: .leading) {
                     if #available(iOS 15, *) {
                         Text(highlightedName)
@@ -83,48 +82,25 @@ struct PlugInCell: View {
                             .font(.headline)
                             .lineLimit(2)
                     }
+
                     Text(gDateFormatter.string(from: plugIn.createdAt))
                         .font(.subheadline)
                         .lineLimit(1)
                 }
-                
-                Spacer()
-                
-                // 3. 右侧：开关 或 菊花
-                // 判断：如果正在替换 且 目标就是我 -> 显示菊花
-                if ejectList.isReplacing && ejectList.plugInToReplace == plugIn {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .secondary)) // 使用原生小菊花
-                        .scaleEffect(0.8) //稍微调小一点，匹配开关的高度
-                } else {
-                    // 否则 -> 显示开关
-                    Toggle("", isOn: $isEnabled)
-                        .labelsHidden() // 隐藏 Toggle 自带的 label，只保留开关按钮
-                }
-            }
-            .padding(.vertical, 4) // 保持高度舒适
-            .onAppear {
-                isEnabled = plugIn.isEnabled
-            }
-            .onChange(of: isEnabled) { value in
-                ejectList.togglePlugIn(plugIn, isEnabled: value)
-            }
-            // 仅在非替换状态下才允许 Context Menu 操作，防止冲突
-            .contextMenu(ejectList.isReplacing ? nil : ContextMenu { menuItems })
-            .sheet(isPresented: $isRenameSheetPresented) {
-                RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
-                    .environmentObject(renameManager)
             }
         }
-
-        // 把菜单项提取出来，让代码更清晰
-        @ViewBuilder
-        var menuItems: some View {
-            Button {
-                isRenameSheetPresented = true
-            } label: {
-                Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
-            }
+        .onAppear {
+            isEnabled = plugIn.isEnabled
+        }
+        .onChange(of: isEnabled) { value in
+            ejectList.togglePlugIn(plugIn, isEnabled: value)
+        }
+        .contextMenu {
+        Button {
+            isRenameSheetPresented = true
+        } label: {
+            Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
+        }
             Button {
                 ejectList.plugInToReplace = plugIn
             } label: {
@@ -141,6 +117,7 @@ struct PlugInCell: View {
                     Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
                 }
             }
+
             Button {
                 openInFilza()
             } label: {
@@ -152,6 +129,11 @@ struct PlugInCell: View {
             }
             .disabled(!isFilzaInstalled)
         }
+        .sheet(isPresented: $isRenameSheetPresented) {
+            RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
+                            .environmentObject(renameManager)
+        }
+    }
     
     private func exportPlugIn() {
         quickLookExport = plugIn.url

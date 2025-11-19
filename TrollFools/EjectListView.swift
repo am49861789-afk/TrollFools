@@ -41,6 +41,42 @@ struct EjectListView: View {
         _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
     
+    @ViewBuilder
+    private var loadingView: some View {
+        ZStack {
+            Color.primary.opacity(0.2)
+                .ignoresSafeArea()
+
+            if #available(iOS 15.0, *) {
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+
+                    Text(NSLocalizedString("Replacing...", comment: ""))
+                        .font(.headline)
+                }
+                .padding(25)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
+                .shadow(radius: 10)
+            } else {
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+
+                    Text(NSLocalizedString("Replacing...", comment: ""))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .padding(25)
+                .background(Color.black.opacity(0.75))
+                .cornerRadius(15)
+                .shadow(radius: 10)
+            }
+        }
+        .transition(.opacity)
+    }
+
     var body: some View {
         ZStack {
             if #available(iOS 15, *) {
@@ -62,7 +98,12 @@ struct EjectListView: View {
             } else {
                 content
             }
+            
+            if isReplacing {
+                loadingView
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: isReplacing)
         .quickLookPreview($quickLookExport)
     }
 
@@ -657,7 +698,7 @@ struct EjectListView: View {
         let wasEnabled = plugInToReplace.isEnabled
         var logFileURL: URL?
         
-        self.ejectList.isReplacing = true
+        self.isReplacing = true
 
        // let view = viewControllerHost.viewController?.navigationController?.view
         //view?.isUserInteractionEnabled = false
@@ -669,7 +710,7 @@ struct EjectListView: View {
                     ejectList.app.reload()
                     ejectList.reload()
                     //view?.isUserInteractionEnabled = true
-                    self.ejectList.isReplacing = false
+                    self.isReplacing = false
                 }
             }
 
