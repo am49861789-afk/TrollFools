@@ -110,7 +110,7 @@ struct AppListView: View {
                                 // 2. 横向布局的 HUD
                                 HStack(spacing: 20) {
                                     ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .label))
+                                        .progressViewStyle(CircularProgressViewStyle(tint: Color.white))
                                     
                                     Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
                                         .font(.headline)
