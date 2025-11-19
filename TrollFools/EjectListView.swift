@@ -41,42 +41,14 @@ struct EjectListView: View {
         _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
     
-    @ViewBuilder
-    private var loadingView: some View {
-        ZStack {
-            Color.primary.opacity(0.2)
+    // [新增] 隐形阻断层：不显示任何 UI，只负责拦截点击
+        @ViewBuilder
+        private var loadingView: some View {
+            Color.black.opacity(0.001) // 极低透明度，肉眼不可见但能拦截点击
                 .ignoresSafeArea()
-
-            if #available(iOS 15.0, *) {
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-
-                    Text(NSLocalizedString("Replacing...", comment: ""))
-                        .font(.headline)
-                }
-                .padding(25)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
-                .shadow(radius: 10)
-            } else {
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-
-                    Text(NSLocalizedString("Replacing...", comment: ""))
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-                .padding(25)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(15)
-                .shadow(radius: 10)
-            }
+                .zIndex(100) // 确保覆盖在最上层
         }
-        .transition(.opacity)
-    }
-
+    
     var body: some View {
         ZStack {
             if #available(iOS 15, *) {
@@ -99,11 +71,13 @@ struct EjectListView: View {
                 content
             }
             
-            if isReplacing {
-                loadingView
-            }
+            
+            // [新增] 这一段必须加，否则 loadingView 不会生效
+                        if ejectList.isReplacing {
+                                         loadingView
+                        }
+            
         }
-        .animation(.easeOut(duration: 0.2), value: isReplacing)
         .quickLookPreview($quickLookExport)
     }
 
@@ -698,7 +672,7 @@ struct EjectListView: View {
         let wasEnabled = plugInToReplace.isEnabled
         var logFileURL: URL?
         
-        self.isReplacing = true
+        self.ejectList.isReplacing = true
 
        // let view = viewControllerHost.viewController?.navigationController?.view
         //view?.isUserInteractionEnabled = false
@@ -710,7 +684,7 @@ struct EjectListView: View {
                     ejectList.app.reload()
                     ejectList.reload()
                     //view?.isUserInteractionEnabled = true
-                    self.isReplacing = false
+                    self.ejectList.isReplacing = false
                 }
             }
 
