@@ -157,7 +157,32 @@ struct AppListView: View {
                     isAdvertisementHidden = false
                 }
             }
-        }
+    
+            .alert(isPresented: $isEnableAllPluginsAlertPresented) {
+                Alert(
+                    title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
+                    message: Text(NSLocalizedString("This will enable all disabled plug-ins across all applications. This action may take some time.", comment: "")),
+                    primaryButton: .destructive(Text(NSLocalizedString("Confirm", comment: ""))) {
+                        appList.isProcessingAllPlugins = true 
+                        appList.enableAllDisabledPlugins {
+                            appList.isProcessingAllPlugins = false
+                            appList.reload()
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+                /*
+                CheckUpdateManager.shared.checkUpdateIfNeeded { latestVersion, _ in
+                    DispatchQueue.main.async {
+                        withAnimation {
+                            latestVersionString = latestVersion?.tagName
+                        }
+                    }
+                }
+                 */
+    }
+    
     
     // [新增] 核心检查函数：添加在文件末尾的 struct 内部
         private func checkPendingShortcut() {
@@ -195,31 +220,6 @@ struct AppListView: View {
                 }
             }
         }
-    
-            .alert(isPresented: $isEnableAllPluginsAlertPresented) {
-                Alert(
-                    title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
-                    message: Text(NSLocalizedString("This will enable all disabled plug-ins across all applications. This action may take some time.", comment: "")),
-                    primaryButton: .destructive(Text(NSLocalizedString("Confirm", comment: ""))) {
-                        appList.isProcessingAllPlugins = true 
-                        appList.enableAllDisabledPlugins {
-                            appList.isProcessingAllPlugins = false
-                            appList.reload()
-                        }
-                    },
-                    secondaryButton: .cancel()
-                )
-            }
-                /*
-                CheckUpdateManager.shared.checkUpdateIfNeeded { latestVersion, _ in
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            latestVersionString = latestVersion?.tagName
-                        }
-                    }
-                }
-                 */
-    }
 
     var styledNavigationView: some View {
         Group {
