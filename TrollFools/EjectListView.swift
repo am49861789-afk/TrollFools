@@ -41,26 +41,34 @@ struct EjectListView: View {
         _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
     // [修改] 完全使用系统原生 UI，无任何自定义背景框或位置强制
-    // [修改] 兼容 iOS 14 的原生 UI 加载视图
+    // [修改] 仿 TrollStore 风格的居中 HUD 加载样式
         @ViewBuilder
         private var loadingView: some View {
             ZStack {
-                // 1. 全屏半透明遮罩 (阻断点击)
-                Color.black.opacity(0.25)
+                // 1. 背景遮罩
+                Color.black.opacity(0.4)
                     .ignoresSafeArea()
                 
-                // 2. 系统原生 ProgressView (适配不同版本)
-                if #available(iOS 15.0, *) {
-                    // iOS 15+ 使用新 API
-                    ProgressView(NSLocalizedString("Replacing...", comment: ""))
-                        .controlSize(.large)
-                        .tint(.white)
-                } else {
-                    // iOS 14 使用兼容 API
-                    ProgressView(NSLocalizedString("Replacing...", comment: ""))
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5) // 放大 1.5 倍来模拟大号样式
+                // 2. 居中卡片 HUD
+                VStack(spacing: 20) {
+                    if #available(iOS 15.0, *) {
+                        ProgressView()
+                            .controlSize(.large)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: Color(UIColor.label)))
+                            .scaleEffect(1.5)
+                    }
+                    
+                    Text(NSLocalizedString("Replacing...", comment: ""))
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
                 }
+                .padding(24)
+                .frame(minWidth: 160)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 4)
             }
             .transition(.opacity)
             .zIndex(100)
