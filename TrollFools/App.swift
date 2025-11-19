@@ -100,43 +100,53 @@ final class App: Identifiable, Equatable, Hashable, ObservableObject {
         hasher.combine(bid)
     }
 }
-// 添加到 App.swift 最底部
+// --- 请添加到 App.swift 的最末尾 ---
 
 extension App {
+    // 判断当前 App 是否已在桌面菜单中
     var isPinnedToHome: Bool {
         let pinnedIDs = UserDefaults.standard.stringArray(forKey: "pinned_shortcut_ids") ?? []
         return pinnedIDs.contains(bid)
     }
 
+    // 切换状态：添加或移除
     func toggleHomeShortcut() {
         var pinnedIDs = UserDefaults.standard.stringArray(forKey: "pinned_shortcut_ids") ?? []
         
         if isPinnedToHome {
             pinnedIDs.removeAll { $0 == bid }
         } else {
+            // 限制最多显示 3 个，避免挤占系统菜单
             if pinnedIDs.count >= 3 { return }
             pinnedIDs.append(bid)
         }
         
         UserDefaults.standard.set(pinnedIDs, forKey: "pinned_shortcut_ids")
         updateApplicationShortcuts(with: pinnedIDs)
+        
+        // 通知 UI 刷新
         objectWillChange.send()
     }
 
+    // 更新系统的 shortcutItems
     private func updateApplicationShortcuts(with ids: [String]) {
         var shortcuts: [UIApplicationShortcutItem] = []
+        
         for id in ids {
-            let appName = LSApplicationProxy(forIdentifier: id)?.localizedName() ?? id
-            let icon = UIApplicationShortcutIcon(systemImageName: "gear")
+            // 使用系统私有 API 获取准确的应用名称
+            let name = LSApplicationProxy(forIdentifier: id)?.localizedName() ?? id
+            
+            let icon = UIApplicationShortcutIcon(systemImageName: "gear") // 图标设为齿轮
             let item = UIApplicationShortcutItem(
-                type: "wiki.qaq.TrollFools.openManagedApp",
-                localizedTitle: appName,
+                type: "wiki.qaq.TrollFools.openManagedApp", // 唯一的动作标识符
+                localizedTitle: name,
                 localizedSubtitle: nil,
                 icon: icon,
-                userInfo: ["targetBid": id as NSSecureCoding]
+                userInfo: ["targetBid": id as NSSecureCoding] // 关键：把 ID 存入
             )
             shortcuts.append(item)
         }
+        
         UIApplication.shared.shortcutItems = shortcuts
     }
 }

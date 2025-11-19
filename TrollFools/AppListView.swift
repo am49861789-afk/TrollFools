@@ -18,10 +18,10 @@ struct AppListView: View {
     @StateObject var searchViewModel = AppListSearchModel()
     @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
-    // === 新增变量 ===
+    
+    // [新增]
         @State private var shortcutTargetApp: App?
         @State private var isShortcutActive: Bool = false
-        // === 结束新增 ===
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
     @State var selectedIndex: String? = nil
@@ -146,47 +146,56 @@ struct AppListView: View {
                 }
             }
         
-        // === 插入开始：核心监听 ===
-            .onReceive(ShortcutNavigationService.shared.$targetBundleID) { bid in
-                guard let bid = bid else { return }
-                ShortcutNavigationService.shared.targetBundleID = nil // 重置信号
-
-                // 1. 尝试从现有列表中查找
-                var foundApp: App? = nil
-                for (_, apps) in appList.activeScopeApps {
-                    if let target = apps.first(where: { $0.bid == bid }) {
-                        foundApp = target
-                        break
-                    }
+        // [新增] 监听信箱变化
+                .onReceive(ShortcutService.shared.$pendingID) { _ in
+                    checkPendingShortcut()
                 }
-
-                // 2. 【关键修复】如果列表中还没加载出来，直接从系统读取并创建对象
-                if foundApp == nil {
-                    if let proxy = LSApplicationProxy(forIdentifier: bid) {
-                        foundApp = App(
-                            bid: bid,
-                            name: proxy.localizedName() ?? bid,
-                            type: proxy.applicationType() ?? "User",
-                            teamID: proxy.teamID() ?? "",
-                            url: proxy.bundleURL()
-                        )
-                        foundApp?.appList = appList // 注入依赖
-                    }
-                }
-
-                // 3. 执行跳转
-                if let app = foundApp {
-                    self.shortcutTargetApp = app
-                    self.isShortcutActive = true
-                }
-            }
-            // === 插入结束 ===
-        
+                // [新增] 页面显示时主动检查（双重保险）
             .onAppear {
+                checkPendingShortcut()
                 if Double.random(in: 0 ..< 1) < 0.1 {
                     isAdvertisementHidden = false
                 }
             }
+        }
+    
+    // [新增] 核心检查函数：添加在文件末尾的 struct 内部
+        private func checkPendingShortcut() {
+            guard let bid = ShortcutService.shared.pendingID else { return }
+            ShortcutService.shared.pendingID = nil // 取出后立即清空
+            
+            // 1. 先在已加载的列表中找
+            var foundApp: App? = nil
+            for (_, apps) in appList.activeScopeApps {
+                if let target = apps.first(where: { $0.bid == bid }) {
+                    foundApp = target
+                    break
+                }
+            }
+            
+            // 2. 找不到？直接从系统构造一个（兜底机制，确保 100% 跳转）
+            if foundApp == nil {
+                if let proxy = LSApplicationProxy(forIdentifier: bid) {
+                    foundApp = App(
+                        bid: bid,
+                        name: proxy.localizedName() ?? bid,
+                        type: proxy.applicationType() ?? "User",
+                        teamID: proxy.teamID() ?? "",
+                        url: proxy.bundleURL()
+                    )
+                    foundApp?.appList = appList
+                }
+            }
+            
+            // 3. 执行跳转
+            if let app = foundApp {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.shortcutTargetApp = app
+                    self.isShortcutActive = true
+                }
+            }
+        }
+    
             .alert(isPresented: $isEnableAllPluginsAlertPresented) {
                 Alert(
                     title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
@@ -228,15 +237,16 @@ struct AppListView: View {
         NavigationView {
             ScrollViewReader { reader in
                 ZStack {
-                    // === 插入开始：隐形跳转链接 ===
-                                    NavigationLink(isActive: $isShortcutActive) {
-                                        if let app = shortcutTargetApp {
-                                            OptionView(app)
-                                        }
-                                    } label: {
-                                        EmptyView()
+                    
+                    // [新增] 隐形通道
+                                NavigationLink(isActive: $isShortcutActive) {
+                                    if let app = shortcutTargetApp {
+                                        OptionView(app)
                                     }
-                                    // === 插入结束 ===
+                                } label: {
+                                    EmptyView()
+                                }
+                    
                     refreshableListView
 
                     if verticalSizeClass == .regular && appList.activeScopeApps.keys.count > 1 {

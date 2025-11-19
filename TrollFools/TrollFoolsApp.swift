@@ -8,35 +8,41 @@
 import SwiftUI
 import UIKit
 
-// 1. 导航服务
-class ShortcutNavigationService: ObservableObject {
-    static let shared = ShortcutNavigationService()
-    @Published var targetBundleID: String? = nil
+// 1. 简单的信箱服务，用来暂存桌面的跳转请求
+class ShortcutService: ObservableObject {
+    static let shared = ShortcutService()
+    @Published var pendingID: String? = nil
 }
 
-// 2. AppDelegate 拦截快捷菜单
+// 2. AppDelegate：负责接收系统指令
 class AppDelegate: NSObject, UIApplicationDelegate {
+    // 情况A：App 在后台
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
-        handleShortcut(shortcutItem)
-        completionHandler(true)
+        if handleShortcut(shortcutItem) {
+            completionHandler(true)
+        } else {
+            completionHandler(false)
+        }
     }
 
+    // 情况B：App 冷启动
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
-            handleShortcut(shortcutItem)
+            _ = handleShortcut(shortcutItem)
             return false
         }
         return true
     }
 
-    private func handleShortcut(_ item: UIApplicationShortcutItem) {
+    // 统一处理：把 ID 存进信箱，不发通知，防止丢失
+    private func handleShortcut(_ item: UIApplicationShortcutItem) -> Bool {
         if item.type == "wiki.qaq.TrollFools.openManagedApp",
            let bid = item.userInfo?["targetBid"] as? String {
-            // 延迟 0.8 秒，给数据加载留出时间，虽然我们有了兜底机制，多一点缓冲更稳
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                ShortcutNavigationService.shared.targetBundleID = bid
-            }
+            print("TrollFools: Shortcut received for \(bid)")
+            ShortcutService.shared.pendingID = bid
+            return true
         }
+        return false
     }
 }
 
@@ -44,7 +50,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct TrollFoolsApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
-    // 关键修改：使用 @StateObject 保证 Model 不会因为视图刷新而丢失数据
+    // 提升 model 为 StateObject，保证生命周期
     @StateObject var model = AppListModel()
     
     @AppStorage("isDisclaimerHiddenV2")
