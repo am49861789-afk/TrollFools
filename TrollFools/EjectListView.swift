@@ -41,6 +41,7 @@ struct EjectListView: View {
         _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
     // [修改] 完全使用系统原生 UI，无任何自定义背景框或位置强制
+    // [修改] 兼容 iOS 14 的原生 UI 加载视图
         @ViewBuilder
         private var loadingView: some View {
             ZStack {
@@ -48,10 +49,18 @@ struct EjectListView: View {
                 Color.black.opacity(0.25)
                     .ignoresSafeArea()
                 
-                // 2. 系统原生 ProgressView (自动处理布局和样式)
-                ProgressView(NSLocalizedString("Replacing...", comment: ""))
-                    .controlSize(.large) // 使用大号样式
-                    .tint(.white)        // 确保在半透明黑背景上能看清
+                // 2. 系统原生 ProgressView (适配不同版本)
+                if #available(iOS 15.0, *) {
+                    // iOS 15+ 使用新 API
+                    ProgressView(NSLocalizedString("Replacing...", comment: ""))
+                        .controlSize(.large)
+                        .tint(.white)
+                } else {
+                    // iOS 14 使用兼容 API
+                    ProgressView(NSLocalizedString("Replacing...", comment: ""))
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5) // 放大 1.5 倍来模拟大号样式
+                }
             }
             .transition(.opacity)
             .zIndex(100)
