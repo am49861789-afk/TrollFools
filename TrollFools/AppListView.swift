@@ -22,6 +22,8 @@ struct AppListView: View {
     // [新增]
         @State private var shortcutTargetApp: App?
         @State private var isShortcutActive: Bool = false
+    // [新增] 轮询定时器
+        let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
     @State var selectedIndex: String? = nil
@@ -146,17 +148,16 @@ struct AppListView: View {
                 }
             }
         
-        // [新增] 监听信箱变化
-                .onReceive(ShortcutService.shared.$pendingID) { _ in
-                    checkPendingShortcut()
-                }
-                // [新增] 页面显示时主动检查（双重保险）
-            .onAppear {
-                checkPendingShortcut()
-                if Double.random(in: 0 ..< 1) < 0.1 {
-                    isAdvertisementHidden = false
-                }
-            }
+        // [修改] 使用定时器轮询：每 0.5 秒检查一次，直到跳转成功
+                    .onReceive(timer) { _ in
+                        attemptShortcutJump()
+                    }
+                    .onAppear {
+                        // 只保留广告逻辑
+                        if Double.random(in: 0 ..< 1) < 0.1 {
+                            isAdvertisementHidden = false
+                        }
+                    }
     
             .alert(isPresented: $isEnableAllPluginsAlertPresented) {
                 Alert(
@@ -184,12 +185,15 @@ struct AppListView: View {
     }
     
     
-    // [新增] 核心检查函数：添加在文件末尾的 struct 内部
-        private func checkPendingShortcut() {
+    // [修改] 核心跳转函数 (轮询模式)
+        private func attemptShortcutJump() {
+            // 1. 检查是否有任务 (注意：先不要清空 pendingID，找到应用后再清空)
             guard let bid = ShortcutService.shared.pendingID else { return }
-            ShortcutService.shared.pendingID = nil // 取出后立即清空
             
-            // 1. 先在已加载的列表中找
+            // 2. 如果当前正在跳转中，暂停处理
+            guard !isShortcutActive else { return }
+
+            // 3. 尝试在已加载的列表中查找
             var foundApp: App? = nil
             for (_, apps) in appList.activeScopeApps {
                 if let target = apps.first(where: { $0.bid == bid }) {
@@ -198,7 +202,7 @@ struct AppListView: View {
                 }
             }
             
-            // 2. 找不到？直接从系统构造一个（兜底机制，确保 100% 跳转）
+            // 4. 兜底：如果列表还没加载出来，尝试用 LSApplicationProxy 直接构造
             if foundApp == nil {
                 if let proxy = LSApplicationProxy(forIdentifier: bid) {
                     foundApp = App(
@@ -212,9 +216,16 @@ struct AppListView: View {
                 }
             }
             
-            // 3. 执行跳转
+            // 5. 只有找到了 App 对象，才执行跳转并“撕掉条子”(清空 ID)
+            // 如果没找到 (foundApp == nil)，则什么都不做，等待 0.5 秒后的下一次检查
             if let app = foundApp {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                print("TrollFools: Target found for \(bid), jumping...")
+                
+                // 标记任务完成
+                ShortcutService.shared.pendingID = nil
+                
+                // 执行跳转
+                DispatchQueue.main.async {
                     self.shortcutTargetApp = app
                     self.isShortcutActive = true
                 }
@@ -238,14 +249,14 @@ struct AppListView: View {
             ScrollViewReader { reader in
                 ZStack {
                     
-                    // [新增] 隐形通道
-                                NavigationLink(isActive: $isShortcutActive) {
-                                    if let app = shortcutTargetApp {
-                                        OptionView(app)
-                                    }
-                                } label: {
-                                    EmptyView()
+                    // [新增] 隐形跳转链接
+                            NavigationLink(isActive: $isShortcutActive) {
+                                if let app = shortcutTargetApp {
+                                    OptionView(app)
                                 }
+                            } label: {
+                                EmptyView()
+                            }
                     
                     refreshableListView
 
