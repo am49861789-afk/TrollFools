@@ -110,7 +110,7 @@ struct PlugInCell: View {
                 ejectList.togglePlugIn(plugIn, isEnabled: value)
             }
             // 仅在非替换状态下才允许 Context Menu 操作，防止冲突
-            .contextMenu(ejectList.isReplacing ? nil : menuItems)
+            .contextMenu(ejectList.isReplacing ? nil : ContextMenu { menuItems })
             .sheet(isPresented: $isRenameSheetPresented) {
                 RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
                     .environmentObject(renameManager)
