@@ -35,14 +35,13 @@ struct AppListView: View {
 
     @AppStorage("isWarningHidden")
     var isWarningHidden: Bool = false
-    
-    @AppStorage("isAutoEnableOnUpdateEnabled")
-    private var isAutoEnableOnUpdateEnabled: Bool = false
-    @State private var autoEnableAlertMessage: String?
-    @State private var singleTapWorkItem: DispatchWorkItem?
 
     var shouldShowAdvertisement: Bool {
-        return false
+        !isAdvertisementHidden &&
+            !appList.filter.isSearching &&
+            !appList.filter.showPatchedOnly &&
+            !appList.isRebuildNeeded &&
+            !appList.isSelectorMode
     }
 
     var appString: String {
@@ -99,6 +98,7 @@ struct AppListView: View {
         } else {
             content
         }
+            
             if appList.isProcessingAllPlugins {
                 Color.black.opacity(0.4).ignoresSafeArea()
                 VStack(spacing: 15) {
@@ -115,28 +115,9 @@ struct AppListView: View {
                 .shadow(radius: 10)
                 .transition(.opacity)
             }
-            
-            if appList.isCheckingForUpdates {
-                Color.black.opacity(0.4).ignoresSafeArea()
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-                    Text(NSLocalizedString("检测到应用版本变化，正在重新启用插件...", comment: ""))
-                        .font(.headline)
-                        .foregroundColor(.white)
                 }
-                .padding(25)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(15)
-                .shadow(radius: 10)
-                .transition(.opacity)
+               .animation(.easeOut, value: appList.isProcessingAllPlugins)
             }
-            
-         }
-        .animation(.easeOut, value: appList.isProcessingAllPlugins || appList.isCheckingForUpdates)
-     }
-
 
     var content: some View {
         styledNavigationView
@@ -160,13 +141,28 @@ struct AppListView: View {
                     selectorOpenedURL = urlIdent
                 }
             }
+        
+        // =========== 开始插入代码 ============
+                .onReceive(NotificationCenter.default.publisher(for: .tfEnableAllPlugins)) { _ in
+                    // 如果当前已经在处理中，则忽略
+                    guard !appList.isProcessingAllPlugins else { return }
+                    
+                    // 设置处理状态，这会触发界面显示 Loading 转圈
+                    appList.isProcessingAllPlugins = true
+                    
+                    // 调用 AppListModel 中的核心方法执行逻辑
+                    appList.enableAllDisabledPlugins {
+                        // 完成后的回调
+                        appList.isProcessingAllPlugins = false
+                        appList.reload()
+                    }
+                }
+                // =========== 结束插入代码 ============
+        
             .onAppear {
                 if Double.random(in: 0 ..< 1) < 0.1 {
                     isAdvertisementHidden = false
                 }
-            }
-            .alert(item: $autoEnableAlertMessage) { message in
-                Alert(title: Text(NSLocalizedString("成功", comment: "")), message: Text(message), dismissButton: .default(Text(NSLocalizedString("好的", comment: ""))))
             }
             .alert(isPresented: $isEnableAllPluginsAlertPresented) {
                 Alert(
@@ -179,7 +175,7 @@ struct AppListView: View {
                             appList.reload()
                         }
                     },
-                    secondaryButton: .cancel(Text(NSLocalizedString("Cancel", comment: "")))
+                    secondaryButton: .cancel()
                 )
             }
                 /*
@@ -266,7 +262,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -336,44 +332,25 @@ struct AppListView: View {
                     }
                 }
             }
+
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Label(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""), systemImage: "play.circle")
-                    .foregroundColor(.accentColor)
-                    .simultaneousGesture(
-                        TapGesture(count: 2)
-                            .onEnded { _ in
-                                self.singleTapWorkItem?.cancel()
-
-                                DispatchQueue.main.async {
-                                    isAutoEnableOnUpdateEnabled.toggle()
-                                    if isAutoEnableOnUpdateEnabled {
-                                        autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已开启", comment: "")
-                                    } else {
-                                        autoEnableAlertMessage = NSLocalizedString("“版本更新后自动启用插件”功能已关闭", comment: "")
-                                    }
-                                }
-                            }
-                    )
-                    .onTapGesture(count: 1) {
-                        let workItem = DispatchWorkItem {
-                            isEnableAllPluginsAlertPresented = true
-                        }
-                        self.singleTapWorkItem = workItem
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
-                    }
-
+                Button {
+                    isEnableAllPluginsAlertPresented = true
+                } label: {
+                    Image(systemName: "play.circle")
+                }
                 .disabled(appList.isProcessingAllPlugins)
                 .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
 
                 Button {
-                    appList.showPatchedOnly.toggle()
+                    appList.filter.showPatchedOnly.toggle()
                 } label: {
                     if #available (iOS 15, *) {
-                        Image(systemName: appList.showPatchedOnly
+                        Image(systemName: appList.filter.showPatchedOnly
                         ? "line.3.horizontal.decrease.circle.fill"
                         : "line.3.horizontal.decrease.circle")
                     }  else  {
-                        Image(systemName: appList.showPatchedOnly
+                        Image(systemName: appList.filter.showPatchedOnly
                         ? "eject.circle.fill"
                         : "eject.circle")
                     }
@@ -382,22 +359,22 @@ struct AppListView: View {
             }
         }
     }
-
+    
     var allAppGroup: some View {
         Group {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
 
             
-            //if #available(iOS 15, *) {
-              //  if shouldShowAdvertisement {
-                 //   advertisementSection
-             //   }
-          //  }
+            if #available(iOS 15, *) {
+                if shouldShowAdvertisement {
+                    advertisementSection
+                }
+            }
              
 
             appSections
@@ -406,7 +383,7 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
                     Button {
@@ -429,7 +406,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -636,7 +613,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {
@@ -661,8 +638,4 @@ struct AppListView: View {
 struct URLIdentifiable: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
-}
-
-extension String: Identifiable {
-    public var id: String { self }
 }
