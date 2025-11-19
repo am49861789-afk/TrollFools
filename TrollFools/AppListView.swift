@@ -100,33 +100,26 @@ struct AppListView: View {
         } else {
             content
         }
-            // [修改] 仿 TrollStore 风格的居中 HUD 加载样式
+            // [修改] 仿原生 Alert 风格的横向加载条
                         if appList.isProcessingAllPlugins {
                             ZStack {
-                                // 1. 背景遮罩 (加深一点，突出中间的卡片)
-                                Color.black.opacity(0.4)
+                                // 1. 背景遮罩
+                                Color.black.opacity(0.25)
                                     .ignoresSafeArea()
                                 
-                                // 2. 居中卡片 HUD
-                                VStack(spacing: 20) {
-                                    if #available(iOS 15.0, *) {
-                                        ProgressView()
-                                            .controlSize(.large)
-                                    } else {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: Color(UIColor.label)))
-                                            .scaleEffect(1.5)
-                                    }
+                                // 2. 横向布局的 HUD
+                                HStack(spacing: 20) {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .label))
                                     
                                     Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
                                         .font(.headline)
-                                        .multilineTextAlignment(.center)
                                 }
-                                .padding(24) // 内部边距
-                                .frame(minWidth: 160) // 最小宽度，保证方正感
-                                .background(Color(UIColor.secondarySystemGroupedBackground)) // 使用系统二级背景色(适配深色/浅色)
-                                .cornerRadius(16) // 圆角
-                                .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 4) // 阴影提升层次感
+                                .padding(.vertical, 20)
+                                .padding(.horizontal, 30)
+                                .background(Color(UIColor.secondarySystemGroupedBackground)) // 适配深色/浅色模式的背景色
+                                .cornerRadius(12)
+                                .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 5)
                             }
                             .transition(.opacity)
                             .zIndex(100)
