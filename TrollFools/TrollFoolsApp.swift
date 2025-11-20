@@ -8,13 +8,18 @@
 import SwiftUI
 import UIKit
 
-// 1. 信箱服务：存储待跳转的 ID
+// 1. [必须补全] 定义通知名称，否则 .tfEnableAllPlugins 会报错
+extension Notification.Name {
+    static let tfEnableAllPlugins = Notification.Name("TFEnableAllPlugins")
+}
+
+// 2. 信箱服务：存储待跳转的 ID
 class ShortcutService: ObservableObject {
     static let shared = ShortcutService()
     @Published var pendingID: String? = nil
 }
 
-// 2. SceneDelegate：核心处理类
+// 3. SceneDelegate：核心处理类
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     // [场景生命周期] App 冷启动 (彻底杀后台后打开)
@@ -54,34 +59,34 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
     
-    // 处理 URL 跳转 (trollfools://open?bid=xxx)
+    // 处理 URL 跳转
     private func handleURL(_ url: URL) {
-        print("[TrollFools] SceneDelegate URL: \(url.absoluteString)")
+        print("[TrollFools] SceneDelegate received URL: \(url.absoluteString)")
         
-        if url.scheme == "trollfools" && url.host == "open" {
+        // 检查协议头
+        guard url.scheme == "trollfools" else { return }
+
+        // 情况 1: 打开指定 App (trollfools://open?bid=...)
+        if url.host == "open" {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            // 提取 bid 参数
             if let queryItems = components?.queryItems,
                let bid = queryItems.first(where: { $0.name == "bid" })?.value {
                 print("[TrollFools] URL target bid: \(bid)")
                 ShortcutService.shared.pendingID = bid
             }
-                    }
-                    
-                    // 2. [新增] 处理一键启用全部插件
-                    // 格式: trollfools://enable-all
-                    if url.scheme == "trollfools" && url.host == "enable-all" {
-                        print("[TrollFools] Received Enable All Plugins request via URL")
-                        
-                        // 发送通知，触发 TrollFoolsApp 里的 .onReceive 监听逻辑
-                        // 延迟 0.5 秒确保 UI 加载完毕
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            NotificationCenter.default.post(name: .tfEnableAllPlugins, object: nil)
-                        }
-                    }
-                }
+        }
+        // 情况 2: 一键启用全部 (trollfools://enable-all)
+        else if url.host == "enable-all" {
+            print("[TrollFools] Received Enable All Plugins request via URL")
+            // 延迟 0.5 秒确保 UI 加载完毕
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NotificationCenter.default.post(name: .tfEnableAllPlugins, object: nil)
+            }
+        }
+    }
+}
 
-// 3. AppDelegate：配置 SceneDelegate
+// 4. AppDelegate：配置 SceneDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         let config = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
