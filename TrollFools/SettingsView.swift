@@ -12,18 +12,15 @@ struct SettingsView: View {
 
     init(_ app: App) {
         self.app = app
-        _useWeakReference = AppStorage(wrappedValue: true, "UseWeakReference-\(app.bid)")
-        _preferMainExecutable = AppStorage(wrappedValue: false, "PreferMainExecutable-\(app.bid)")
-        _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)")
-        _isBlacklisted = AppStorage(wrappedValue: false, "isBlacklisted-\(app.bid)")
+        _useWeakReference = AppStorage(wrappedValue: true, "UseWeakReference-\(app.id)")
+        _preferMainExecutable = AppStorage(wrappedValue: false, "PreferMainExecutable-\(app.id)")
+        _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.id)")
     }
 
     @AppStorage var useWeakReference: Bool
     @AppStorage var preferMainExecutable: Bool
     @AppStorage var injectStrategy: InjectorV3.Strategy
 
-    @AppStorage var isBlacklisted: Bool
-    
     @StateObject var viewControllerHost = ViewControllerHost()
 
     var body: some View {
@@ -41,14 +38,6 @@ struct SettingsView: View {
                     paddedHeaderFooterText(NSLocalizedString("Injection", comment: ""))
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("If you do not know what these options mean, please do not change them.", comment: ""))
-                }
-
-                Section {
-                    Toggle(NSLocalizedString("Blacklist", comment: ""), isOn: $isBlacklisted)
-                } header: {
-                    paddedHeaderFooterText(NSLocalizedString("Other", comment: ""))
-                } footer: {
-                    paddedHeaderFooterText(NSLocalizedString("If blacklist is enabled, this app will be skipped when enabling all disabled plugins.", comment: ""))
                 }
             }
             .navigationTitle(NSLocalizedString("Advanced Settings", comment: ""))

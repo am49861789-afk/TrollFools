@@ -10,15 +10,19 @@ import SwiftUI
 struct OptionView: View {
     let app: App
 
-    @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
+
     @State var isImporterPresented = false
     @State var isImporterSelected = false
+
     @State var isWarningPresented = false
     @State var temporaryResult: Result<[URL], any Error>?
+
     @State var isSettingsPresented = false
     @State var importerResult: Result<[URL], any Error>?
+
     @State var numberOfPlugIns: Int = 0
+
     @AppStorage("isWarningHidden")
     var isWarningHidden: Bool = false
 
@@ -54,30 +58,12 @@ struct OptionView: View {
                         Text(NSLocalizedString("Cancel", comment: ""))
                     }
                 } message: {
-                    if case .success(let urls) = $0 {
+                    if case let .success(urls) = $0 {
                         Text(Self.warningMessage(urls))
                     }
                 }
         } else {
             wrappedContent
-            .alert(isPresented: $isWarningPresented) {
-                guard case .success(let urls) = temporaryResult else {
-                    return Alert(title: Text("Error"))
-                }
-                
-                return Alert(
-                    title: Text(NSLocalizedString("Notice", comment: "")),
-                    message: Text(Self.warningMessage(urls)),
-                    primaryButton: .destructive(Text(NSLocalizedString("Continue and Don’t Show Again", comment: ""))) {
-                        importerResult = temporaryResult
-                        isImporterSelected = true
-                        isWarningHidden = true
-                    },
-                    secondaryButton: .cancel() {
-                        temporaryResult = nil
-                    }
-                )
-            }
         }
     }
 
@@ -104,8 +90,6 @@ struct OptionView: View {
                 } label: {
                     OptionCell(option: .detach, detachCount: numberOfPlugIns)
                 }
-                .disabled(appList.isProcessingAllPlugins)
-                .opacity(appList.isProcessingAllPlugins ? 0.5 : 1.0)
                 .accessibilityLabel(
                     numberOfPlugIns == 0
                         ? NSLocalizedString("Manage", comment: "")
@@ -130,10 +114,10 @@ struct OptionView: View {
             NavigationLink(isActive: $isImporterSelected) {
                 if let result = importerResult {
                     switch result {
-                    case .success(let urls):
+                    case let .success(urls):
                         InjectView(app, urlList: urls
                             .sorted(by: { $0.lastPathComponent < $1.lastPathComponent }))
-                    case .failure(let error):
+                    case let .failure(error):
                         FailureView(
                             title: NSLocalizedString("Error", comment: ""),
                             error: error
@@ -159,7 +143,7 @@ struct OptionView: View {
         ) {
             result in
             switch result {
-            case .success(let theSuccess):
+            case let .success(theSuccess):
                 if !isWarningHidden && theSuccess.contains(where: { $0.pathExtension.lowercased() == "deb" }) {
                     temporaryResult = result
                     isWarningPresented = true
@@ -202,12 +186,12 @@ struct OptionView: View {
         }
         return String(format: NSLocalizedString("You’ve selected at least one Debian Package “%@”. We’re here to remind you that it will not work as it was in a jailbroken environment. Please make sure you know what you’re doing.", comment: ""), firstDylibName)
     }
-    
+
     private func recalculatePlugInCount() {
         var urls = [URL]()
         urls += InjectorV3.main.injectedAssetURLsInBundle(app.url)
         let enabledNames = urls.map { $0.lastPathComponent }
-        urls += InjectorV3.main.persistedAssetURLs(bid: app.bid)
+        urls += InjectorV3.main.persistedAssetURLs(id: app.id)
             .filter { !enabledNames.contains($0.lastPathComponent) }
         numberOfPlugIns = urls.count
     }
