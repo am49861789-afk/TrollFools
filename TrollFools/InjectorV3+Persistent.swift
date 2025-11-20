@@ -35,18 +35,18 @@ extension InjectorV3 {
         }
     }
 
-    func persistedAssetURLs(id: String) -> [URL] {
-        let base = Self.persistentPlugInsRootURL.appendingPathComponent(id, isDirectory: true)
+    func persistedAssetURLs(bid: String) -> [URL] {
+        let base = Self.persistentPlugInsRootURL.appendingPathComponent(bid, isDirectory: true)
         guard let contents = try? FileManager.default.contentsOfDirectory(atPath: base.path) else {
             return []
         }
-        return filteredURLs(contents
+        return contents
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            .map { base.appendingPathComponent($0) })
+            .map { base.appendingPathComponent($0) }
     }
 
-    func hasPersistedAssets(id: String) -> Bool {
-        let base = Self.persistentPlugInsRootURL.appendingPathComponent(id, isDirectory: true)
+    func hasPersistedAssets(bid: String) -> Bool {
+        let base = Self.persistentPlugInsRootURL.appendingPathComponent(bid, isDirectory: true)
         guard let contents = try? FileManager.default.contentsOfDirectory(atPath: base.path) else {
             return false
         }
