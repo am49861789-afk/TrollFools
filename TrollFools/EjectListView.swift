@@ -19,54 +19,76 @@ struct EjectListView: View {
     @State var isDisablingAll = false
     @State var isDeletingAll = false
     @State var isExportingAll = false
-    @State var isErrorOccurred = false
+    @State var isReplaceImporterPresented = false
+    @State var isErrorOccurred: Bool = false
+    @State private var isReplacing: Bool = false
     @State var lastError: Error?
-
     @State var isWarningPresented = false
+    @Environment(\.colorScheme) var colorScheme
 
     @StateObject var viewControllerHost = ViewControllerHost()
 
     @AppStorage var useWeakReference: Bool
     @AppStorage var preferMainExecutable: Bool
     @AppStorage var injectStrategy: InjectorV3.Strategy
+    @StateObject private var renameManager: RenameManager
 
     init(_ app: App) {
         _ejectList = StateObject(wrappedValue: EjectListModel(app))
-        _useWeakReference = AppStorage(wrappedValue: true, "UseWeakReference-\(app.id)")
-        _preferMainExecutable = AppStorage(wrappedValue: false, "PreferMainExecutable-\(app.id)")
-        _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.id)")
+        _useWeakReference = AppStorage(wrappedValue: true, "UseWeakReference-\(app.bid)")
+        _preferMainExecutable = AppStorage(wrappedValue: false, "PreferMainExecutable-\(app.bid)")
+        _injectStrategy = AppStorage(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)")
+        _renameManager = StateObject(wrappedValue: RenameManager(appId: app.bid))
     }
-
-    var body: some View {
-        if #available(iOS 15, *) {
-            content
-                .alert(NSLocalizedString("Eject All", comment: ""), isPresented: $isWarningPresented) {
-                    Button(role: .destructive) {
-                        deleteAll(shouldDesist: true)
-                    } label: {
-                        Text(NSLocalizedString("Confirm", comment: ""))
-                    }
-                    Button(role: .cancel) {
-                        isWarningPresented = false
-                    } label: {
-                        Text(NSLocalizedString("Cancel", comment: ""))
-                    }
-                } message: {
-                    Text(NSLocalizedString("Are you sure you want to eject all plug-ins? This action cannot be undone.", comment: ""))
-                }
-        } else {
-            content
+    
+    // [新增] 隐形阻断层：不显示任何 UI，只负责拦截点击
+        @ViewBuilder
+        private var loadingView: some View {
+            Color.black.opacity(0.001) // 极低透明度，肉眼不可见但能拦截点击
+                .ignoresSafeArea()
+                .zIndex(100) // 确保覆盖在最上层
         }
-    }
+    
+    var body: some View {
+            ZStack {
+                // [修改] 使用 Group 包裹内容，以便统一添加 .disabled
+                Group {
+                    if #available(iOS 15, *) {
+                        content
+                            .alert(NSLocalizedString("Eject All", comment: ""), isPresented: $isWarningPresented) {
+                                Button(role: .destructive) {
+                                    deleteAll(shouldDesist: true)
+                                } label: {
+                                    Text(NSLocalizedString("Confirm", comment: ""))
+                                }
+                                Button(role: .cancel) {
+                                    isWarningPresented = false
+                                } label: {
+                                    Text(NSLocalizedString("Cancel", comment: ""))
+                                }
+                            } message: {
+                                Text(NSLocalizedString("Are you sure you want to eject all plug-ins? This action cannot be undone.", comment: ""))
+                            }
+                    } else {
+                        content
+                    }
+                }
+                .disabled(ejectList.isReplacing) // <--- 【核心修改】替换时禁用底层所有交互(包括滑动)
+
+                // [保留] 隐形阻断层 (双重保险)
+                if ejectList.isReplacing {
+                    loadingView
+                }
+            }
+                    // [新增] 监听重命名变化，并同步给 ListModel 以便搜索
+                    .onReceive(renameManager.$plugInRenames) { renames in
+                        ejectList.plugInRenames = renames
+                        ejectList.performFilter() // 重新过滤，以便搜索结果即时更新
+            }
+            .quickLookPreview($quickLookExport)
+        }
 
     var content: some View {
-        refreshableListView
-            .toolbar { toolbarContent }
-            .animation(.easeOut, value: isExportingAll)
-            .quickLookPreview($quickLookExport)
-    }
-
-    var refreshableListView: some View {
         Group {
             if #available(iOS 15, *) {
                 searchableListView
@@ -92,6 +114,7 @@ struct EjectListView: View {
             }
         }
     }
+
 
     var searchableListView: some View {
         Group {
@@ -170,6 +193,9 @@ struct EjectListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .toolbar {
+            toolbarContent
+        }
         .navigationTitle(NSLocalizedString("Plug-Ins", comment: ""))
         .animation(.easeOut, value: combines(
             ejectList.filter,
@@ -190,6 +216,40 @@ struct EjectListView: View {
         .onChange(of: ejectList.processingPlugIn) { plugIn in
             if let plugIn {
                 togglePlugIn(plugIn)
+            }
+        }
+        
+        .fileImporter(
+             isPresented: $isReplaceImporterPresented,
+             allowedContentTypes: [
+                 .init(filenameExtension: "dylib")!,
+                 .init(filenameExtension: "deb")!,
+                 .bundle,
+                 .framework,
+                 .package,
+                 .zip,
+             ],
+             allowsMultipleSelection: false
+         ) { result in
+             switch result {
+             case .success(let urls):
+                 if let url = urls.first {
+                     performReplace(with: url)
+                 }
+             case .failure(let error):
+                 self.lastError = error
+                 self.isErrorOccurred = true
+             }
+         }
+         .onChange(of: ejectList.plugInToReplace) { plugIn in
+             if plugIn != nil {
+                 isReplaceImporterPresented = true
+             }
+         }
+
+        .onChange(of: isReplaceImporterPresented) { isPresented in
+            if !isPresented {
+                ejectList.plugInToReplace = nil
             }
         }
     }
@@ -274,7 +334,7 @@ struct EjectListView: View {
             if #available(iOS 16.4, *) {
                 ShareLink(
                     item: CompressedFileRepresentation(
-                        name: "\(ejectList.app.name)_\(ejectList.app.id)_\(UUID().uuidString.components(separatedBy: "-").last ?? "").zip",
+                        name: "\(ejectList.app.name)_\(ejectList.app.bid)_\(UUID().uuidString.components(separatedBy: "-").last ?? "").zip",
                         urls: ejectList.injectedPlugIns.map(\.url)
                     ),
                     preview: SharePreview(
@@ -314,9 +374,11 @@ struct EjectListView: View {
             if #available(iOS 16, *) {
                 PlugInCell(plugin, quickLookExport: $quickLookExport)
                     .environmentObject(ejectList)
+                    .environmentObject(renameManager)
             } else {
                 PlugInCell(plugin, quickLookExport: $quickLookExport)
                     .environmentObject(ejectList)
+                    .environmentObject(renameManager)
                     .padding(.vertical, 4)
             }
         }
@@ -333,7 +395,7 @@ struct EjectListView: View {
             logFileURL = injector.latestLogFileURL
 
             if injector.appID.isEmpty {
-                injector.appID = ejectList.app.id
+                injector.appID = ejectList.app.bid
             }
 
             if injector.teamID.isEmpty {
@@ -376,7 +438,7 @@ struct EjectListView: View {
             logFileURL = injector.latestLogFileURL
 
             if injector.appID.isEmpty {
-                injector.appID = ejectList.app.id
+                injector.appID = ejectList.app.bid
             }
 
             if injector.teamID.isEmpty {
@@ -425,7 +487,7 @@ struct EjectListView: View {
             logFileURL = injector.latestLogFileURL
 
             if injector.appID.isEmpty {
-                injector.appID = ejectList.app.id
+                injector.appID = ejectList.app.bid
             }
 
             if injector.teamID.isEmpty {
@@ -498,7 +560,7 @@ struct EjectListView: View {
             logFileURL = injector.latestLogFileURL
 
             if injector.appID.isEmpty {
-                injector.appID = ejectList.app.id
+                injector.appID = ejectList.app.bid
             }
 
             if injector.teamID.isEmpty {
@@ -611,6 +673,81 @@ struct EjectListView: View {
         }
     }
 
+    private func performReplace(with newURL: URL) {
+        guard let plugInToReplace = ejectList.plugInToReplace else { return }
+
+        let wasEnabled = plugInToReplace.isEnabled
+        var logFileURL: URL?
+        
+        self.ejectList.isReplacing = true
+
+       // let view = viewControllerHost.viewController?.navigationController?.view
+        //view?.isUserInteractionEnabled = false
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer {
+                DispatchQueue.main.async {
+                    ejectList.plugInToReplace = nil
+                    ejectList.app.reload()
+                    ejectList.reload()
+                    //view?.isUserInteractionEnabled = true
+                    self.ejectList.isReplacing = false
+                }
+            }
+
+            do {
+                let injector = try InjectorV3(ejectList.app.url)
+                logFileURL = injector.latestLogFileURL
+                if injector.appID.isEmpty { injector.appID = ejectList.app.bid }
+                if injector.teamID.isEmpty { injector.teamID = ejectList.app.teamID }
+
+                injector.useWeakReference = useWeakReference
+                injector.preferMainExecutable = preferMainExecutable
+                injector.injectStrategy = injectStrategy
+
+                if wasEnabled {
+                    
+                    try injector.eject([plugInToReplace.url], shouldDesist: true)
+                    DDLogInfo("Successfully ejected old enabled plugin: \(plugInToReplace.url.lastPathComponent)", ddlog: injector.logger)
+
+                    try injector.inject([newURL], shouldPersist: true)
+                    DDLogInfo("Successfully injected new plugin: \(newURL.lastPathComponent)", ddlog: injector.logger)
+                    
+                } else {
+                    
+                    let preparedAssetURLs = try injector.preprocessAssets([newURL])
+                    guard let newAssetURL = preparedAssetURLs.first else {
+                        throw InjectorV3.Error.generic(NSLocalizedString("No valid plug-ins found in the selected file.", comment: ""))
+                    }
+
+                    let oldPersistentURL = injector.persistentPlugInsDirectoryURL.appendingPathComponent(plugInToReplace.url.lastPathComponent)
+
+                    if FileManager.default.fileExists(atPath: oldPersistentURL.path) {
+                        try injector.cmdRemove(oldPersistentURL, recursively: injector.checkIsDirectory(oldPersistentURL))
+                        DDLogInfo("Removed old disabled plugin from persistent storage: \(oldPersistentURL.lastPathComponent)", ddlog: injector.logger)
+                    }
+
+                    let newPersistentURL = injector.persistentPlugInsDirectoryURL.appendingPathComponent(newAssetURL.lastPathComponent)
+                    try injector.cmdCopy(from: newAssetURL, to: newPersistentURL, overwrite: true)
+                    try injector.cmdChangeOwner(newPersistentURL, owner: 501, groupOwner: 501, recursively: injector.checkIsDirectory(newPersistentURL))
+                    DDLogInfo("Copied new plugin to persistent storage: \(newPersistentURL.lastPathComponent)", ddlog: injector.logger)
+                }
+
+            } catch {
+                DispatchQueue.main.async {
+                    DDLogError("\(error)", ddlog: InjectorV3.main.logger)
+                    var userInfo: [String: Any] = [NSLocalizedDescriptionKey: error.localizedDescription]
+                    if let logFileURL {
+                        userInfo[NSURLErrorKey] = logFileURL
+                    }
+                    let nsErr = NSError(domain: Constants.gErrorDomain, code: 0, userInfo: userInfo)
+                    lastError = nsErr
+                    isErrorOccurred = true
+                }
+            }
+        }
+    }
+    
     @ViewBuilder
     private func paddedHeaderFooterText(_ content: String) -> some View {
         if #available(iOS 15, *) {

@@ -8,8 +8,8 @@
 import Combine
 import Foundation
 
-final class App: Identifiable, ObservableObject {
-    let id: String
+final class App: Identifiable, Equatable, Hashable, ObservableObject {
+    let bid: String
     let name: String
     let latinName: String
     let type: String
@@ -23,12 +23,12 @@ final class App: Identifiable, ObservableObject {
     @Published var isInjected: Bool
     @Published var hasPersistedAssets: Bool
 
-    lazy var icon: UIImage? = UIImage._applicationIconImage(forBundleIdentifier: id, format: 0, scale: 3.0)
+    lazy var icon: UIImage? = UIImage._applicationIconImage(forBundleIdentifier: bid, format: 0, scale: 3.0)
     var alternateIcon: UIImage?
 
     lazy var isUser: Bool = type == "User"
     lazy var isSystem: Bool = !isUser
-    lazy var isFromApple: Bool = id.hasPrefix("com.apple.")
+    lazy var isFromApple: Bool = bid.hasPrefix("com.apple.")
     lazy var isFromTroll: Bool = isSystem && !isFromApple
     lazy var isRemovable: Bool = url.path.contains("/var/containers/Bundle/Application/")
 
@@ -37,7 +37,7 @@ final class App: Identifiable, ObservableObject {
     private static let reloadSubject = PassthroughSubject<String, Never>()
 
     init(
-        id: String,
+        bid: String,
         name: String,
         type: String,
         teamID: String,
@@ -46,7 +46,7 @@ final class App: Identifiable, ObservableObject {
         alternateIcon: UIImage? = nil,
         isAdvertisement: Bool = false
     ) {
-        self.id = id
+        self.bid = bid
         self.name = name
         self.type = type
         self.teamID = teamID
@@ -55,7 +55,7 @@ final class App: Identifiable, ObservableObject {
         self.isDetached = InjectorV3.main.isMetadataDetachedInBundle(url)
         self.isAllowedToAttachOrDetach = type == "User" && InjectorV3.main.isAllowedToAttachOrDetachMetadataInBundle(url)
         self.isInjected = InjectorV3.main.checkIsInjectedAppBundle(url)
-        self.hasPersistedAssets = InjectorV3.main.hasPersistedAssets(id: id)
+        self.hasPersistedAssets = InjectorV3.main.hasPersistedAssets(bid: bid)
         self.alternateIcon = alternateIcon
         self.isAdvertisement = isAdvertisement
         self.latinName = name
@@ -64,7 +64,7 @@ final class App: Identifiable, ObservableObject {
             .components(separatedBy: .whitespaces)
             .joined() ?? ""
         Self.reloadSubject
-            .filter { $0 == id }
+            .filter { $0 == bid }
             .sink { [weak self] _ in
                 self?._reload()
             }
@@ -72,7 +72,7 @@ final class App: Identifiable, ObservableObject {
     }
 
     func reload() {
-        Self.reloadSubject.send(id)
+        Self.reloadSubject.send(bid)
     }
 
     private func _reload() {
@@ -87,6 +87,66 @@ final class App: Identifiable, ObservableObject {
 
     private func reloadInjectedStatus() {
         self.isInjected = InjectorV3.main.checkIsInjectedAppBundle(url)
-        self.hasPersistedAssets = InjectorV3.main.hasPersistedAssets(id: id)
+        self.hasPersistedAssets = InjectorV3.main.hasPersistedAssets(bid: bid)
+    }
+    
+    var id: String { bid }
+
+    static func == (lhs: App, rhs: App) -> Bool {
+        lhs.bid == rhs.bid
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(bid)
+    }
+}
+// --- 请添加到 App.swift 的最末尾 ---
+
+extension App {
+    // 判断当前 App 是否已在桌面菜单中
+    var isPinnedToHome: Bool {
+        let pinnedIDs = UserDefaults.standard.stringArray(forKey: "pinned_shortcut_ids") ?? []
+        return pinnedIDs.contains(bid)
+    }
+
+    // 切换状态：添加或移除
+    func toggleHomeShortcut() {
+        var pinnedIDs = UserDefaults.standard.stringArray(forKey: "pinned_shortcut_ids") ?? []
+        
+        if isPinnedToHome {
+            pinnedIDs.removeAll { $0 == bid }
+        } else {
+            // 限制最多显示 3 个
+            if pinnedIDs.count >= 4 { return }
+            pinnedIDs.append(bid)
+        }
+        
+        UserDefaults.standard.set(pinnedIDs, forKey: "pinned_shortcut_ids")
+        updateApplicationShortcuts(with: pinnedIDs)
+        
+        // 通知 UI 刷新
+        objectWillChange.send()
+    }
+
+    // 更新系统的 shortcutItems
+    private func updateApplicationShortcuts(with ids: [String]) {
+        var shortcuts: [UIApplicationShortcutItem] = []
+        
+        for id in ids {
+            // 使用系统私有 API 获取准确的应用名称
+            let name = LSApplicationProxy(forIdentifier: id)?.localizedName() ?? id
+            
+            let icon = UIApplicationShortcutIcon(systemImageName: "gear")
+            let item = UIApplicationShortcutItem(
+                type: "wiki.qaq.TrollFools.openManagedApp", // 唯一的动作标识符
+                localizedTitle: name,
+                localizedSubtitle: nil,
+                icon: icon,
+                userInfo: ["targetBid": id as NSSecureCoding] // 把 ID 存入 userInfo
+            )
+            shortcuts.append(item)
+        }
+        
+        UIApplication.shared.shortcutItems = shortcuts
     }
 }
