@@ -66,9 +66,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 print("[TrollFools] URL target bid: \(bid)")
                 ShortcutService.shared.pendingID = bid
             }
-        }
-    }
-}
+                    }
+                    
+                    // 2. [新增] 处理一键启用全部插件
+                    // 格式: trollfools://enable-all
+                    if url.scheme == "trollfools" && url.host == "enable-all" {
+                        print("[TrollFools] Received Enable All Plugins request via URL")
+                        
+                        // 发送通知，触发 TrollFoolsApp 里的 .onReceive 监听逻辑
+                        // 延迟 0.5 秒确保 UI 加载完毕
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            NotificationCenter.default.post(name: .tfEnableAllPlugins, object: nil)
+                        }
+                    }
+                }
 
 // 3. AppDelegate：配置 SceneDelegate
 class AppDelegate: NSObject, UIApplicationDelegate {
