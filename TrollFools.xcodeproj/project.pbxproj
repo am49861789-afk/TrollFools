@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		192F2BE62E73339A0054FB6C /* UnsupportedAppListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192F2BE52E7333960054FB6C /* UnsupportedAppListView.swift */; };
+		194651F02ECF2E00008B90EF /* PluginStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194651EF2ECF2DFE008B90EF /* PluginStateManager.swift */; };
 		199A9C5B2E72C5D900407E7B /* RenameManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 199A9C5A2E72C5D600407E7B /* RenameManager.swift */; };
 		6124A06D2CD2322400C52253 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6124A06C2CD2322400C52253 /* App.swift */; };
 		6124A06F2CD2324200C52253 /* AppListModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6124A06E2CD2324200C52253 /* AppListModel.swift */; };
@@ -145,6 +146,7 @@
 
 /* Begin PBXFileReference section */
 		192F2BE52E7333960054FB6C /* UnsupportedAppListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedAppListView.swift; sourceTree = "<group>"; };
+		194651EF2ECF2DFE008B90EF /* PluginStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginStateManager.swift; sourceTree = "<group>"; };
 		199A9C5A2E72C5D600407E7B /* RenameManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameManager.swift; sourceTree = "<group>"; };
 		6124A06C2CD2322400C52253 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		6124A06E2CD2324200C52253 /* AppListModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppListModel.swift; sourceTree = "<group>"; };
@@ -440,6 +442,7 @@
 		CCF470582C4A4649008D8197 /* TrollFools */ = {
 			isa = PBXGroup;
 			children = (
+				194651EF2ECF2DFE008B90EF /* PluginStateManager.swift */,
 				CC60FBEB2CC50F5A00A6D21A /* BartyCrouch.swift */,
 				199A9C5A2E72C5D600407E7B /* RenameManager.swift */,
 				CCF470592C4A4649008D8197 /* TrollFoolsApp.swift */,
@@ -659,6 +662,7 @@
 				61EFA37D2D311DA800159442 /* InjectorV3+Inject.swift in Sources */,
 				CCF5A0A62C4D45400097D48D /* AuxiliaryExecute+Spawn.swift in Sources */,
 				CCB6A11B2C4A6066000D75B0 /* InjectView.swift in Sources */,
+				194651F02ECF2E00008B90EF /* PluginStateManager.swift in Sources */,
 				CCF470732C4A4E81008D8197 /* TrollFoolsStub.m in Sources */,
 				6124A06D2CD2322400C52253 /* App.swift in Sources */,
 				CC15490E2C4B80AF00A4173E /* EjectListView.swift in Sources */,
