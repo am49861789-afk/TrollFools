@@ -62,78 +62,75 @@ struct PlugInCell: View {
     }
 
     var body: some View {
-        Toggle(isOn: $isEnabled) {
-            HStack(spacing: 12) {
-                if verticalSizeClass == .compact {
-                    Image(systemName: iconName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
-                        .foregroundColor(.accentColor)
-                }
-
-                VStack(alignment: .leading) {
-                    if #available(iOS 15, *) {
-                        Text(highlightedName)
-                            .font(.headline)
-                            .lineLimit(2)
-                    } else {
-                        Text(displayName)
-                            .font(.headline)
-                            .lineLimit(2)
+            Toggle(isOn: $isEnabled) {
+                HStack(spacing: 12) {
+                    if verticalSizeClass == .compact {
+                        Image(systemName: iconName)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 24, height: 24)
+                            .foregroundColor(.accentColor)
                     }
-
-                    Text(gDateFormatter.string(from: plugIn.createdAt))
-                        .font(.subheadline)
-                        .lineLimit(1)
+                    VStack(alignment: .leading) {
+                        if #available(iOS 15, *) {
+                            Text(highlightedName)
+                                .font(.headline)
+                                .lineLimit(2)
+                        } else {
+                            Text(displayName)
+                                .font(.headline)
+                                .lineLimit(2)
+                        }
+                        Text(gDateFormatter.string(from: plugIn.createdAt))
+                            .font(.subheadline)
+                            .lineLimit(1)
+                    }
                 }
             }
-        }
-        .onAppear {
-            isEnabled = plugIn.isEnabled
-        }
-        .onChange(of: isEnabled) { value in
-            ejectList.togglePlugIn(plugIn, isEnabled: value)
-        }
-        .contextMenu {
-        Button {
-            isRenameSheetPresented = true
-        } label: {
-            Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
-        }
-            Button {
-                ejectList.plugInToReplace = plugIn
-            } label: {
-                Label(NSLocalizedString("Replace", comment: ""), systemImage: "arrow.triangle.2.circlepath")
+            .onAppear {
+                isEnabled = plugIn.isEnabled
             }
-            if #available(iOS 16.4, *) {
-                ShareLink(item: plugIn.url) {
-                    Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
-                }
-            } else {
+            .onChange(of: isEnabled) { value in
+                ejectList.togglePlugIn(plugIn, isEnabled: value)
+            }
+            .contextMenu {
                 Button {
-                    exportPlugIn()
+                    isRenameSheetPresented = true
                 } label: {
-                    Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                    Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
                 }
-            }
-
-            Button {
-                openInFilza()
-            } label: {
-                if isFilzaInstalled {
-                    Label(NSLocalizedString("Show in Filza", comment: ""), systemImage: "scope")
+                Button {
+                    ejectList.plugInToReplace = plugIn
+                } label: {
+                    Label(NSLocalizedString("Replace", comment: ""), systemImage: "arrow.triangle.2.circlepath")
+                }
+                if #available(iOS 16.4, *) {
+                    ShareLink(item: plugIn.url) {
+                        Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                    }
                 } else {
-                    Label(NSLocalizedString("Filza (URL Scheme) Not Installed", comment: ""), systemImage: "xmark.octagon")
+                    Button {
+                        exportPlugIn()
+                    } label: {
+                        Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                    }
                 }
+                Button {
+                    openInFilza()
+                } label: {
+                    if isFilzaInstalled {
+                        Label(NSLocalizedString("Show in Filza", comment: ""), systemImage: "scope")
+                    } else {
+                        Label(NSLocalizedString("Filza (URL Scheme) Not Installed", comment: ""), systemImage: "xmark.octagon")
+                    }
+                }
+                .disabled(!isFilzaInstalled)
             }
-            .disabled(!isFilzaInstalled)
+            .sheet(isPresented: $isRenameSheetPresented) {
+                RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
+                    .environmentObject(renameManager)
+            }
         }
-        .sheet(isPresented: $isRenameSheetPresented) {
-            RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
-                            .environmentObject(renameManager)
-        }
-    }
     
     private func exportPlugIn() {
         quickLookExport = plugIn.url

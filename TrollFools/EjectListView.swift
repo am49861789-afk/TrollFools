@@ -80,6 +80,11 @@ struct EjectListView: View {
                     loadingView
                 }
             }
+                    // [新增] 监听重命名变化，并同步给 ListModel 以便搜索
+                    .onReceive(renameManager.$plugInRenames) { renames in
+                        ejectList.plugInRenames = renames
+                        ejectList.performFilter() // 重新过滤，以便搜索结果即时更新
+            }
             .quickLookPreview($quickLookExport)
         }
 

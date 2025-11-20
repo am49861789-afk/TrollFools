@@ -14,6 +14,9 @@ final class EjectListModel: ObservableObject {
 
     @Published var filter = FilterOptions()
     
+    // [新增] 也是为了让 Model 知道有哪些重命名
+        var plugInRenames: [String: String] = [:]
+    
     // [新增] 全局替换状态，让 Cell 也能读取到
         @Published var isReplacing: Bool = false
     @Published var filteredPlugIns: [InjectedPlugIn] = []
@@ -54,19 +57,28 @@ final class EjectListModel: ObservableObject {
         performFilter()
     }
 
-    func performFilter() {
-        var filteredPlugIns = injectedPlugIns
-
-        if !filter.searchKeyword.isEmpty {
-            filteredPlugIns = filteredPlugIns.filter {
-                $0.url.lastPathComponent.localizedCaseInsensitiveContains(filter.searchKeyword)
+    // [修改] 升级后的搜索逻辑：同时匹配“原文件名”和“自定义备注名”
+        func performFilter() {
+            var filteredPlugIns = injectedPlugIns
+            if !filter.searchKeyword.isEmpty {
+                filteredPlugIns = filteredPlugIns.filter { plugin in
+                    let fileName = plugin.url.lastPathComponent
+                    // 1. 检查原文件名
+                    if fileName.localizedCaseInsensitiveContains(filter.searchKeyword) {
+                        return true
+                    }
+                    // 2. 检查重命名后的名字 (如果有)
+                    if let customName = plugInRenames[fileName],
+                       customName.localizedCaseInsensitiveContains(filter.searchKeyword) {
+                        return true
+                    }
+                    return false
+                }
             }
+            self.filteredPlugIns = filteredPlugIns
+            isOkToEnableAll = filteredPlugIns.contains { !$0.isEnabled }
+            isOkToDisableAll = filteredPlugIns.contains { $0.isEnabled }
         }
-
-        self.filteredPlugIns = filteredPlugIns
-        isOkToEnableAll = filteredPlugIns.contains { !$0.isEnabled }
-        isOkToDisableAll = filteredPlugIns.contains { $0.isEnabled }
-    }
 
     func togglePlugIn(_ plugIn: InjectedPlugIn, isEnabled: Bool) {
         guard plugIn.isEnabled != isEnabled else {
