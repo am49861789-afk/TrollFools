@@ -20,26 +20,18 @@ struct PlugInCell: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
 
     @Binding var quickLookExport: URL?
-    
-    @EnvironmentObject var renameManager: RenameManager
-    @State private var isRenameSheetPresented = false
-    
     @State var isEnabled: Bool = false
 
     let plugIn: InjectedPlugIn
 
-    init (_ plugIn: InjectedPlugIn, quickLookExport: Binding<URL?>) {
-           self.plugIn = plugIn
-           self._quickLookExport = quickLookExport
-       }
-    
-    private var displayName: String {
-        renameManager.plugInRenames[plugIn.url.lastPathComponent] ?? plugIn.url.lastPathComponent
+    init(_ plugIn: InjectedPlugIn, quickLookExport: Binding<URL?>) {
+        self.plugIn = plugIn
+        _quickLookExport = quickLookExport
     }
 
     @available(iOS 15, *)
     var highlightedName: AttributedString {
-        let name = displayName
+        let name = plugIn.url.lastPathComponent
         var attributedString = AttributedString(name)
         if let range = attributedString.range(of: ejectList.filter.searchKeyword, options: [.caseInsensitive, .diacriticInsensitive]) {
             attributedString[range].foregroundColor = .accentColor
@@ -62,76 +54,65 @@ struct PlugInCell: View {
     }
 
     var body: some View {
-            Toggle(isOn: $isEnabled) {
-                HStack(spacing: 12) {
-                    if verticalSizeClass == .compact {
-                        Image(systemName: iconName)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 24, height: 24)
-                            .foregroundColor(.accentColor)
-                    }
-                    VStack(alignment: .leading) {
-                        if #available(iOS 15, *) {
-                            Text(highlightedName)
-                                .font(.headline)
-                                .lineLimit(2)
-                        } else {
-                            Text(displayName)
-                                .font(.headline)
-                                .lineLimit(2)
-                        }
-                        Text(gDateFormatter.string(from: plugIn.createdAt))
-                            .font(.subheadline)
-                            .lineLimit(1)
-                    }
+        Toggle(isOn: $isEnabled) {
+            HStack(spacing: 12) {
+                if verticalSizeClass == .compact {
+                    Image(systemName: iconName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                        .foregroundColor(.accentColor)
                 }
-            }
-            .onAppear {
-                isEnabled = plugIn.isEnabled
-            }
-            .onChange(of: isEnabled) { value in
-                ejectList.togglePlugIn(plugIn, isEnabled: value)
-            }
-            .contextMenu {
-                Button {
-                    isRenameSheetPresented = true
-                } label: {
-                    Label(NSLocalizedString("Rename", comment: ""), systemImage: "pencil")
-                }
-                Button {
-                    ejectList.plugInToReplace = plugIn
-                } label: {
-                    Label(NSLocalizedString("Replace", comment: ""), systemImage: "arrow.triangle.2.circlepath")
-                }
-                if #available(iOS 16.4, *) {
-                    ShareLink(item: plugIn.url) {
-                        Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
-                    }
-                } else {
-                    Button {
-                        exportPlugIn()
-                    } label: {
-                        Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
-                    }
-                }
-                Button {
-                    openInFilza()
-                } label: {
-                    if isFilzaInstalled {
-                        Label(NSLocalizedString("Show in Filza", comment: ""), systemImage: "scope")
+
+                VStack(alignment: .leading) {
+                    if #available(iOS 15, *) {
+                        Text(highlightedName)
+                            .font(.headline)
+                            .lineLimit(2)
                     } else {
-                        Label(NSLocalizedString("Filza (URL Scheme) Not Installed", comment: ""), systemImage: "xmark.octagon")
+                        Text(plugIn.url.lastPathComponent)
+                            .font(.headline)
+                            .lineLimit(2)
                     }
+
+                    Text(gDateFormatter.string(from: plugIn.createdAt))
+                        .font(.subheadline)
+                        .lineLimit(1)
                 }
-                .disabled(!isFilzaInstalled)
-            }
-            .sheet(isPresented: $isRenameSheetPresented) {
-                RenameSheetView(isPresented: $isRenameSheetPresented, plugInFilename: plugIn.url.lastPathComponent, currentName: displayName)
-                    .environmentObject(renameManager)
             }
         }
-    
+        .onAppear {
+            isEnabled = plugIn.isEnabled
+        }
+        .onChange(of: isEnabled) { value in
+            ejectList.togglePlugIn(plugIn, isEnabled: value)
+        }
+        .contextMenu {
+            if #available(iOS 16.4, *) {
+                ShareLink(item: plugIn.url) {
+                    Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                }
+            } else {
+                Button {
+                    exportPlugIn()
+                } label: {
+                    Label(NSLocalizedString("Export", comment: ""), systemImage: "square.and.arrow.up")
+                }
+            }
+
+            Button {
+                openInFilza()
+            } label: {
+                if isFilzaInstalled {
+                    Label(NSLocalizedString("Show in Filza", comment: ""), systemImage: "scope")
+                } else {
+                    Label(NSLocalizedString("Filza (URL Scheme) Not Installed", comment: ""), systemImage: "xmark.octagon")
+                }
+            }
+            .disabled(!isFilzaInstalled)
+        }
+    }
+
     private func exportPlugIn() {
         quickLookExport = plugIn.url
     }
@@ -140,61 +121,5 @@ struct PlugInCell: View {
 
     private func openInFilza() {
         ejectList.app.appList?.openInFilza(plugIn.url)
-    }
-    
-    private struct RenameSheetView: View {
-        @Binding var isPresented: Bool
-        @EnvironmentObject var renameManager: RenameManager
-        
-        let plugInFilename: String
-        
-        let currentName: String
-        
-        @State private var newName: String = ""
-        @State private var didAppear = false
-
-        var body: some View {
-            NavigationView {
-                Form {
-                    Section(header: Text(NSLocalizedString("Custom Name", comment: ""))) {
-                        TextField(NSLocalizedString("Enter new name", comment: ""), text: $newName)
-                    Text(NSLocalizedString("Leave it empty to restore the original name.", comment: ""))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                .introspect(.textField, on: .iOS(.v14, .v15, .v16, .v17)) { textField in
-                    if !didAppear {
-                        textField.becomeFirstResponder()
-                        didAppear = true
-                    }
-                }
-                
-                .navigationTitle(NSLocalizedString("Rename", comment: ""))
-                .navigationBarTitleDisplayMode(.inline)
-                .onAppear {
-                    newName = currentName
-                }
-                
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(NSLocalizedString("Cancel", comment: "")) {
-                            isPresented = false
-                        }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(NSLocalizedString("Save", comment: "")) {
-                            if newName.trimmingCharacters(in: .whitespaces).isEmpty {
-                                renameManager.plugInRenames.removeValue(forKey: plugInFilename)
-                            } else {
-                                renameManager.plugInRenames[plugInFilename] = newName
-                            }
-                            isPresented = false
-                        }
-                    }
-                }
-            }
-        }
     }
 }

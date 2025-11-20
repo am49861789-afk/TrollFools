@@ -8,11 +8,8 @@
 import Combine
 import OrderedCollections
 import SwiftUI
-import  CocoaLumberjackSwift
 
 final class AppListModel: ObservableObject {
-    private let showPatchedOnlyKey = "showPatchedOnlyState"
-    @Published var showPatchedOnly: Bool
     enum Scope: Int, CaseIterable {
         case all
         case user
@@ -47,7 +44,6 @@ final class AppListModel: ObservableObject {
     }
 
     static let hasTrollStore: Bool = { LSApplicationProxy(forIdentifier: "com.opa334.TrollStore") != nil }()
-    static let isLegacyDevice: Bool = { UIScreen.main.fixedCoordinateSpace.bounds.height <= 736.0 }()
     private var _allApplications: [App] = []
 
     let selectorURL: URL?
@@ -58,7 +54,6 @@ final class AppListModel: ObservableObject {
     @Published var activeScopeApps: OrderedDictionary<String, [App]> = [:]
 
     @Published var unsupportedCount: Int = 0
-    @Published var unsupportedApps: [App] = []
 
     lazy var isFilzaInstalled: Bool = {
         if let filzaURL {
@@ -70,34 +65,23 @@ final class AppListModel: ObservableObject {
     private let filzaURL = URL(string: "filza://")
 
     @Published var isRebuildNeeded: Bool = false
-    @Published var isProcessingAllPlugins: Bool = false
 
     private let applicationChanged = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
 
     init(selectorURL: URL? = nil) {
-        self.showPatchedOnly = UserDefaults.standard.bool(forKey: showPatchedOnlyKey)
-        
         self.selectorURL = selectorURL
         reload()
-        
-        Publishers.CombineLatest3(
+
+        Publishers.CombineLatest(
             $filter,
-            $activeScope,
-            $showPatchedOnly
+            $activeScope
         )
         .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
-        .sink { [weak self] _, _, _ in
+        .sink { [weak self] _ in
             self?.performFilter()
         }
         .store(in: &cancellables)
-        
-        $showPatchedOnly
-            .dropFirst()
-            .sink { newValue in
-                UserDefaults.standard.set(newValue, forKey: self.showPatchedOnlyKey)
-            }
-            .store(in: &cancellables)
 
         applicationChanged
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
@@ -121,10 +105,9 @@ final class AppListModel: ObservableObject {
     }
 
     func reload() {
-        let (supportedApps, unsupportedApps) = Self.fetchApplications(&unsupportedCount)
-        supportedApps.forEach { $0.appList = self }
-        self.unsupportedApps = unsupportedApps
-        _allApplications = supportedApps
+        let allApplications = Self.fetchApplications(&unsupportedCount)
+        allApplications.forEach { $0.appList = self }
+        _allApplications = allApplications
         performFilter()
     }
 
@@ -133,7 +116,7 @@ final class AppListModel: ObservableObject {
 
         if !filter.searchKeyword.isEmpty {
             filteredApplications = filteredApplications.filter {
-                $0.name.localizedCaseInsensitiveContains(filter.searchKeyword) || $0.bid.localizedCaseInsensitiveContains(filter.searchKeyword) ||
+                $0.name.localizedCaseInsensitiveContains(filter.searchKeyword) || $0.id.localizedCaseInsensitiveContains(filter.searchKeyword) ||
                     (
                         $0.latinName.localizedCaseInsensitiveContains(
                             filter.searchKeyword
@@ -143,7 +126,7 @@ final class AppListModel: ObservableObject {
             }
         }
 
-        if showPatchedOnly {
+        if filter.showPatchedOnly {
             filteredApplications = filteredApplications.filter { $0.isInjected || $0.hasPersistedAssets }
         }
 
@@ -165,7 +148,7 @@ final class AppListModel: ObservableObject {
         "xyz.willy.Zebra",
     ]
 
-    private static func fetchApplications(_ unsupportedCount: inout Int) -> (supported: [App], unsupported: [App]) {
+    private static func fetchApplications(_ unsupportedCount: inout Int) -> [App] {
         let allApps: [App] = LSApplicationWorkspace.default()
             .allApplications()
             .compactMap { proxy in
@@ -188,7 +171,7 @@ final class AppListModel: ObservableObject {
 
                 let shortVersionString: String? = proxy.shortVersionString()
                 let app = App(
-                    bid: id,
+                    id: id,
                     name: localizedName,
                     type: appType,
                     teamID: teamID,
@@ -212,33 +195,22 @@ final class AppListModel: ObservableObject {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         unsupportedCount = allApps.count - filteredApps.count
-        
-        let allAppsSet = Set(allApps)
-        let filteredAppsSet = Set(filteredApps)
-        let unsupportedAppsList = allAppsSet.subtracting(filteredAppsSet)
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        return (filteredApps, unsupportedAppsList)
+        return filteredApps
     }
 }
 
 extension AppListModel {
     func openInFilza(_ url: URL) {
-        let rawPath = url.path
-
-        guard let encodedPath = rawPath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-            UIApplication.shared.open(url)
+        guard let filzaURL else {
             return
         }
-
-        let finalURLString = "filza://view" + encodedPath
-
-        guard let finalURL = URL(string: finalURLString) else { return }
-
-        UIApplication.shared.open(finalURL)
+        let fileURL = filzaURL.appendingPathComponent(url.path)
+        UIApplication.shared.open(fileURL)
     }
 
     func rebuildIconCache() {
+        // Sadly, we can't call `trollstorehelper` directly because only TrollStore can launch it without error.
         DispatchQueue.global(qos: .userInitiated).async {
             LSApplicationWorkspace.default().openApplication(withBundleID: "com.opa334.TrollStore")
         }
@@ -284,58 +256,9 @@ extension AppListModel {
             {
                 return idx1 < idx2
             }
-            return  app1.key < app2.key
-                }
-                return  groupedApps
-            }
+            return app1.key < app2.key
         }
 
-extension AppListModel {
-    func enableAllDisabledPlugins(completion: @escaping () -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let allApps = self._allApplications
-            
-            for  app  in  allApps {
-                        let  isBlacklisted = AppStorage<Bool>(wrappedValue:  false , "isBlacklisted-\(app.bid)").wrappedValue
-                        if  isBlacklisted {
-                            DDLogInfo("Skipping blacklisted app: \(app.bid)", ddlog: InjectorV3.main.logger)
-                            continue
-                        }
-
-                        let  enabledPlugInURLs = InjectorV3.main.injectedAssetURLsInBundle(app.url)
-                        let  enabledNames = Set(enabledPlugInURLs.map { $0.lastPathComponent })
-
-                        let  persistedPlugInURLs = InjectorV3.main.persistedAssetURLs(bid: app.bid)
-
-                        let  plugInsToEnable = persistedPlugInURLs.filter { !enabledNames.contains($0.lastPathComponent) }
-
-                        if  plugInsToEnable.isEmpty {
-                            continue
-                        }
-
-                        do  {
-                            let  injector =  try  InjectorV3(app.url)
-                            if  injector.appID.isEmpty { injector.appID = app.bid }
-                            if  injector.teamID.isEmpty { injector.teamID = app.teamID }
-
-                            injector.useWeakReference = AppStorage<Bool>(wrappedValue:  true , "UseWeakReference-\(app.bid)").wrappedValue
-                            injector.preferMainExecutable = AppStorage<Bool>(wrappedValue:  false , "PreferMainExecutable-\(app.bid)").wrappedValue
-                            injector.injectStrategy = AppStorage<InjectorV3.Strategy>(wrappedValue: .lexicographic, "InjectStrategy-\(app.bid)").wrappedValue
-
-                            try  injector.inject(plugInsToEnable, shouldPersist:  false )
-
-                            DispatchQueue.main.async {
-                                app.reload()
-                            }
-                        }  catch  {
-                            DDLogError("Failed to enable plugins for \(app.bid): \(error)", ddlog: InjectorV3.main.logger)
-                        }
-                    }
-                
-                DispatchQueue.main.async {
-                    completion()
-                }
-            }
-        }
+        return groupedApps
     }
-
+}

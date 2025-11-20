@@ -25,8 +25,8 @@ struct AppListCell: View {
 
     @available(iOS 15, *)
     var highlightedId: AttributedString {
-        let bid = app.bid
-        var attributedString = AttributedString(bid)
+        let id = app.id
+        var attributedString = AttributedString(id)
         if let range = attributedString.range(of: appList.filter.searchKeyword, options: [.caseInsensitive, .diacriticInsensitive]) {
             attributedString[range].foregroundColor = .accentColor
         }
@@ -76,7 +76,7 @@ struct AppListCell: View {
                         .font(.subheadline)
                         .lineLimit(app.isAdvertisement ? 2 : 1)
                 } else {
-                    Text(app.bid)
+                    Text(app.id)
                         .font(.subheadline)
                         .lineLimit(app.isAdvertisement ? 2 : 1)
                 }
@@ -125,20 +125,6 @@ struct AppListCell: View {
             Label(NSLocalizedString("Launch", comment: ""), systemImage: "command")
         }
 
-        // --- 插入开始 ---
-        Button {
-            app.toggleHomeShortcut()
-        } label: {
-            if app.isPinnedToHome {
-                // Key: "Remove from Shortcuts"
-                Label(NSLocalizedString("Remove from Shortcuts", comment: ""), systemImage: "minus.circle")
-            } else {
-                // Key: "Add to Shortcuts"
-                Label(NSLocalizedString("Add to Shortcuts", comment: ""), systemImage: "plus.circle")
-            }
-        }
-                    // --- 插入结束 ---
-        
         if AppListModel.hasTrollStore && app.isAllowedToAttachOrDetach {
             if app.isDetached {
                 Button {
@@ -207,7 +193,7 @@ struct AppListCell: View {
     }
 
     private func launch() {
-        LSApplicationWorkspace.default().openApplication(withBundleID: app.bid)
+        LSApplicationWorkspace.default().openApplication(withBundleID: app.id)
     }
 
     var isFilzaInstalled: Bool { appList.isFilzaInstalled }

@@ -18,23 +18,14 @@ struct AppListView: View {
     @StateObject var searchViewModel = AppListSearchModel()
     @EnvironmentObject var appList: AppListModel
     @Environment(\.verticalSizeClass) var verticalSizeClass
-    
-    // [新增] 控制跳转
-        @State private var shortcutTargetApp: App?
-        @State private var isShortcutActive: Bool = false
-        // [新增] 轮询定时器
-        let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     @State var selectorOpenedURL: URLIdentifiable? = nil
     @State var selectedIndex: String? = nil
-    
-    @State private var isEnableAllPluginsAlertPresented = false
 
     @State var isWarningPresented = false
     @State var temporaryOpenedURL: URLIdentifiable? = nil
 
     @State var latestVersionString: String?
-    @State private var isUnsupportedSheetPresented = false
 
     @AppStorage("isAdvertisementHiddenV2")
     var isAdvertisementHidden: Bool = false
@@ -43,7 +34,11 @@ struct AppListView: View {
     var isWarningHidden: Bool = false
 
     var shouldShowAdvertisement: Bool {
-        return false
+        !isAdvertisementHidden &&
+            !appList.filter.isSearching &&
+            !appList.filter.showPatchedOnly &&
+            !appList.isRebuildNeeded &&
+            !appList.isSelectorMode
     }
 
     var appString: String {
@@ -68,15 +63,14 @@ struct AppListView: View {
         )
     }
 
-    var  body:  some  View {
-        ZStack {
-            if #available (iOS 15, *) {
-                content
+    var body: some View {
+        if #available(iOS 15, *) {
+            content
                 .alert(
                     NSLocalizedString("Notice", comment: ""),
                     isPresented: $isWarningPresented,
                     presenting: temporaryOpenedURL
-                ) { result  in
+                ) { result in
                     Button {
                         selectorOpenedURL = result
                     } label: {
@@ -100,26 +94,7 @@ struct AppListView: View {
         } else {
             content
         }
-            if appList.isProcessingAllPlugins {
-                Color.black.opacity(0.4).ignoresSafeArea()
-                VStack(spacing: 15) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-                    Text(NSLocalizedString("Enabling Plug-Ins...", comment: ""))
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-                .padding(25)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(15)
-                .shadow(radius: 10)
-                .transition(.opacity)
-            }
-                }
-               .animation(.easeOut, value: appList.isProcessingAllPlugins)
-            }
-
+    }
 
     var content: some View {
         styledNavigationView
@@ -143,37 +118,11 @@ struct AppListView: View {
                     selectorOpenedURL = urlIdent
                 }
             }
-        // [新增] 轮询信箱
-                .onReceive(timer) { _ in
-                    attemptShortcutJump()
-                }
-        
-        // [新增] 监听“全部启用”指令，弹出确认框
-                    .onReceive(NotificationCenter.default.publisher(for: .tfEnableAllPlugins)) { _ in
-                        // 收到指令后，将弹窗状态设为 true，界面就会弹出确认框
-                        isEnableAllPluginsAlertPresented = true
-                    }
-        
             .onAppear {
                 if Double.random(in: 0 ..< 1) < 0.1 {
                     isAdvertisementHidden = false
                 }
-            }
-            .alert(isPresented: $isEnableAllPluginsAlertPresented) {
-                Alert(
-                    title: Text(NSLocalizedString("Enable All Disabled Plug-Ins", comment: "")),
-                    message: Text(NSLocalizedString("This will enable all disabled plug-ins across all applications. This action may take some time.", comment: "")),
-                    primaryButton: .destructive(Text(NSLocalizedString("Confirm", comment: ""))) {
-                        appList.isProcessingAllPlugins = true 
-                        appList.enableAllDisabledPlugins {
-                            appList.isProcessingAllPlugins = false
-                            appList.reload()
-                        }
-                    },
-                    secondaryButton: .cancel(Text(NSLocalizedString("Cancel", comment: "")))
-                )
-            }
-                /*
+
                 CheckUpdateManager.shared.checkUpdateIfNeeded { latestVersion, _ in
                     DispatchQueue.main.async {
                         withAnimation {
@@ -181,76 +130,8 @@ struct AppListView: View {
                         }
                     }
                 }
-                 */
+            }
     }
-    
-    // [修改] 核心跳转函数 (支持自动关闭旧页面并打开新页面)
-        private func attemptShortcutJump() {
-            // 1. 检查是否有任务
-            guard let bid = ShortcutService.shared.pendingID else { return }
-            
-            // 【修改点 1】: 删掉了之前的 guard !isShortcutActive else { return }
-            // 我们不再因为当前有页面就停止，而是要主动处理它
-
-            print("[TrollFools] Polling for: \(bid)")
-
-            // 3. 尝试从列表找
-            var foundApp: App? = nil
-            for (_, apps) in appList.activeScopeApps {
-                if let target = apps.first(where: { $0.bid == bid }) {
-                    foundApp = target
-                    break
-                }
-            }
-            
-            // 4. 兜底构造
-            if foundApp == nil {
-                if let proxy = LSApplicationProxy(forIdentifier: bid) {
-                    foundApp = App(
-                        bid: bid,
-                        name: proxy.localizedName() ?? bid,
-                        type: proxy.applicationType() ?? "User",
-                        teamID: proxy.teamID() ?? "",
-                        url: proxy.bundleURL()
-                    )
-                    foundApp?.appList = appList
-                }
-            }
-            
-            // 5. 只有找到了目标 App，才处理跳转逻辑
-            if let app = foundApp {
-                print("[TrollFools] Target found: \(app.name)")
-                
-                // 任务完成，销毁信件
-                ShortcutService.shared.pendingID = nil
-                
-                // 【修改点 2】: 智能跳转逻辑
-                if isShortcutActive {
-                    // 情况 A: 当前已经在一个页面里了
-                    // 动作: 先关闭当前页面 -> 等待动画 -> 打开新页面
-                    print("[TrollFools] Existing view active. Closing first...")
-                    
-                    // 1. 先关闭当前页面 (退回列表)
-                    self.isShortcutActive = false
-                    
-                    // 2. 延迟 0.6 秒 (等待 iOS 导航栏返回动画完成)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                        print("[TrollFools] Opening new target: \(app.name)")
-                        self.shortcutTargetApp = app
-                        self.isShortcutActive = true
-                    }
-                } else {
-                    // 情况 B: 当前在列表页，没打开任何页面
-                    // 动作: 直接打开
-                    print("[TrollFools] Jumping directly to: \(app.name)")
-                    DispatchQueue.main.async {
-                        self.shortcutTargetApp = app
-                        self.isShortcutActive = true
-                    }
-                }
-            }
-            // 如果没找到 foundApp，什么都不做，pendingID 还在，等待下一次 timer 轮询
-        }
 
     var styledNavigationView: some View {
         Group {
@@ -268,16 +149,6 @@ struct AppListView: View {
         NavigationView {
             ScrollViewReader { reader in
                 ZStack {
-                    
-                    // [新增] 隐形跳转通道
-                                NavigationLink(isActive: $isShortcutActive) {
-                                    if let app = shortcutTargetApp {
-                                        EjectListView(app)// 跳转到管理页
-                                    }
-                                } label: {
-                                    EmptyView()
-                                }
-                    
                     refreshableListView
 
                     if verticalSizeClass == .regular && appList.activeScopeApps.keys.count > 1 {
@@ -299,10 +170,6 @@ struct AppListView: View {
             if !appList.isSelectorMode {
                 PlaceholderView()
             }
-        }
-        
-        .sheet(isPresented: $isUnsupportedSheetPresented) {
-               UnsupportedAppListView(unsupportedApps: appList.unsupportedApps, isPresented: $isUnsupportedSheetPresented)
         }
     }
 
@@ -335,7 +202,7 @@ struct AppListView: View {
 
     var searchableListView: some View {
         listView
-            .onChange(of: appList.showPatchedOnly) { showPatchedOnly in
+            .onChange(of: appList.filter.showPatchedOnly) { showPatchedOnly in
                 if let searchBar = searchViewModel.searchController?.searchBar {
                     reloadSearchBarPlaceholder(searchBar, showPatchedOnly: showPatchedOnly)
                 }
@@ -398,33 +265,25 @@ struct AppListView: View {
         .navigationBarTitleDisplayMode(appList.isSelectorMode ? .inline : .automatic)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                if  appList.isSelectorMode,  let  selectorURL = appList.selectorURL {
+                if appList.isSelectorMode, let selectorURL = appList.selectorURL {
                     VStack {
                         Text(selectorURL.lastPathComponent).font(.headline)
                         Text(NSLocalizedString("Select Application to Inject", comment: "")).font(.caption)
                     }
                 }
             }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    isEnableAllPluginsAlertPresented = true
+                    appList.filter.showPatchedOnly.toggle()
                 } label: {
-                    Image(systemName: "play.circle")
-                }
-                .disabled(appList.isProcessingAllPlugins)
-                .accessibilityLabel(NSLocalizedString("Enable All Disabled Plug-Ins", comment: ""))
-
-                Button {
-                    appList.showPatchedOnly.toggle()
-                } label: {
-                    if #available (iOS 15, *) {
-                        Image(systemName: appList.showPatchedOnly
-                        ? "line.3.horizontal.decrease.circle.fill"
-                        : "line.3.horizontal.decrease.circle")
-                    }  else  {
-                        Image(systemName: appList.showPatchedOnly
-                        ? "eject.circle.fill"
-                        : "eject.circle")
+                    if #available(iOS 15, *) {
+                        Image(systemName: appList.filter.showPatchedOnly
+                            ? "line.3.horizontal.decrease.circle.fill"
+                            : "line.3.horizontal.decrease.circle")
+                    } else {
+                        Image(systemName: appList.filter.showPatchedOnly
+                            ? "eject.circle.fill"
+                            : "eject.circle")
                     }
                 }
                 .accessibilityLabel(NSLocalizedString("Show Patched Only", comment: ""))
@@ -437,17 +296,15 @@ struct AppListView: View {
             if latestVersionString != nil {
                 upgradeSection
             }
-            else if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            else if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 unsupportedSection
             }
 
-            
-            //if #available(iOS 15, *) {
-              //  if shouldShowAdvertisement {
-                 //   advertisementSection
-             //   }
-          //  }
-             
+            if #available(iOS 15, *) {
+                if shouldShowAdvertisement {
+                    advertisementSection
+                }
+            }
 
             appSections
         }
@@ -455,14 +312,10 @@ struct AppListView: View {
 
     var userAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded && appList.unsupportedCount > 0 {
                 Section {
                 } footer: {
-                    Button {
-                        isUnsupportedSheetPresented = true
-                    } label: {
-                        paddedHeaderFooterText(String(format: NSLocalizedString("And %d more unsupported user applications.", comment: ""), appList.unsupportedCount))
-                    }
+                    paddedHeaderFooterText(String(format: NSLocalizedString("And %d more unsupported user applications.", comment: ""), appList.unsupportedCount))
                 }
             }
 
@@ -478,7 +331,7 @@ struct AppListView: View {
 
     var systemAppGroup: some View {
         Group {
-            if !appList.filter.isSearching && !appList.showPatchedOnly && !appList.isRebuildNeeded {
+            if !appList.filter.isSearching && !appList.filter.showPatchedOnly && !appList.isRebuildNeeded {
                 Section {
                 } footer: {
                     paddedHeaderFooterText(NSLocalizedString("Only removable system applications are eligible and listed.", comment: ""))
@@ -580,11 +433,7 @@ struct AppListView: View {
     var unsupportedSection: some View {
         Section {
         } footer: {
-            Button {
-                isUnsupportedSheetPresented = true
-            } label: {
-                paddedHeaderFooterText(String(format: NSLocalizedString("And %d more unsupported user applications.", comment: ""), appList.unsupportedCount))
-            }
+            paddedHeaderFooterText(String(format: NSLocalizedString("And %d more unsupported user applications.", comment: ""), appList.unsupportedCount))
         }
         .textCase(.none)
         .transition(.opacity)
@@ -685,7 +534,7 @@ struct AppListView: View {
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
 
-        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.showPatchedOnly)
+        reloadSearchBarPlaceholder(searchController.searchBar, showPatchedOnly: appList.filter.showPatchedOnly)
     }
 
     private func reloadSearchBarPlaceholder(_ searchBar: UISearchBar, showPatchedOnly: Bool) {

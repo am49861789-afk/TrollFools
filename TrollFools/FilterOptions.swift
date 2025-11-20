@@ -9,8 +9,12 @@ import Foundation
 
 struct FilterOptions: Hashable {
     var searchKeyword = ""
+    var showPatchedOnly = false
+
     var isSearching: Bool { !searchKeyword.isEmpty }
+
     mutating func reset() {
         searchKeyword = ""
+        showPatchedOnly = false
     }
 }
