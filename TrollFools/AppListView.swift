@@ -147,6 +147,13 @@ struct AppListView: View {
                 .onReceive(timer) { _ in
                     attemptShortcutJump()
                 }
+        
+        // [新增] 监听“全部启用”指令，弹出确认框
+                    .onReceive(NotificationCenter.default.publisher(for: .tfEnableAllPlugins)) { _ in
+                        // 收到指令后，将弹窗状态设为 true，界面就会弹出确认框
+                        isEnableAllPluginsAlertPresented = true
+                    }
+        
             .onAppear {
                 if Double.random(in: 0 ..< 1) < 0.1 {
                     isAdvertisementHidden = false
